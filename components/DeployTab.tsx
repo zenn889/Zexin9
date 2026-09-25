@@ -144,17 +144,17 @@ export function DeployTab() {
       </div>
 
       {/* 2-Column Deploy Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8">
         {/* Vercel Card */}
-        <div className="p-8 rounded-3xl border border-slate-800 bg-gradient-to-b from-[#0f172a] to-[#070a14] flex flex-col justify-between space-y-6 shadow-2xl relative overflow-hidden group hover:border-slate-700 transition">
+        <div className="p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-slate-800 bg-gradient-to-b from-[#0f172a] to-[#070a14] flex flex-col justify-between space-y-6 shadow-2xl relative overflow-hidden group hover:border-slate-700 transition">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-white text-black flex items-center justify-center font-black text-2xl shadow-lg">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-white text-black flex items-center justify-center font-black text-xl sm:text-2xl shadow-lg">
                   ▲
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-white text-lg">Deploy to Vercel</h3>
+                  <h3 className="font-extrabold text-white text-base sm:text-lg">Deploy to Vercel</h3>
                   <span className="text-xs text-cyan-400 font-mono">Edge Latency & SSE Streaming</span>
                 </div>
               </div>
@@ -162,6 +162,7 @@ export function DeployTab() {
                 1-Click Ready
               </span>
             </div>
+
 
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
               Vercel executes Next.js serverless functions with zero configuration, automatic HTTPS, and global edge routing.
@@ -209,15 +210,15 @@ export function DeployTab() {
         </div>
 
         {/* Netlify Card */}
-        <div className="p-8 rounded-3xl border border-slate-800 bg-gradient-to-b from-[#0f172a] to-[#070a14] flex flex-col justify-between space-y-6 shadow-2xl relative overflow-hidden group hover:border-slate-700 transition">
+        <div className="p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-slate-800 bg-gradient-to-b from-[#0f172a] to-[#070a14] flex flex-col justify-between space-y-6 shadow-2xl relative overflow-hidden group hover:border-slate-700 transition">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-teal-500 text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-teal-500/20">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-teal-500 text-white flex items-center justify-center font-black text-xl sm:text-2xl shadow-lg shadow-teal-500/20">
                   ◇
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-white text-lg">Deploy to Netlify</h3>
+                  <h3 className="font-extrabold text-white text-base sm:text-lg">Deploy to Netlify</h3>
                   <span className="text-xs text-teal-400 font-mono">Serverless Functions & CDN</span>
                 </div>
               </div>
@@ -225,6 +226,7 @@ export function DeployTab() {
                 Included netlify.toml
               </span>
             </div>
+
 
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
               Netlify seamlessly provisions Next.js App Router serverless functions using the provided <code className="text-cyan-400">netlify.toml</code> configuration.

@@ -28,6 +28,7 @@ export default function Home() {
   const [hasMasterKey, setHasMasterKey] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -174,7 +175,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex bg-[#060913] text-slate-100 font-sans">
-      {/* Zexin9 Authentic Left Sidebar */}
+      {/* Zexin9 Authentic Left Sidebar (Desktop + Mobile Drawer + Bottom Nav) */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -187,10 +188,13 @@ export default function Home() {
         isOnline={isGatewayOnline}
         onLogout={handleLogout}
         onOpenSecurity={() => setIsSecurityModalOpen(true)}
+        mobileOpen={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
+        onOpenMobile={() => setMobileMenuOpen(true)}
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#060913]">
+      <div className="flex-1 flex flex-col min-w-0 bg-[#060913] w-full overflow-x-hidden">
         {/* Top Header */}
         <Header
           activeTab={activeTab}
@@ -199,10 +203,12 @@ export default function Home() {
           onRefresh={checkAuthAndStatus}
           onLogout={handleLogout}
           onOpenSecurity={() => setIsSecurityModalOpen(true)}
+          onToggleMobileMenu={() => setMobileMenuOpen((prev) => !prev)}
         />
 
         {/* Dynamic Tab Body */}
-        <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-3 sm:p-6 max-w-7xl w-full mx-auto pb-24 md:pb-6 overflow-x-hidden">
+
           {activeTab === 'dashboard' && (
             <DashboardTab
               onSelectTab={setActiveTab}

@@ -361,7 +361,7 @@ ROUTER_API_KEY=master_password_anda`;
       )}
 
       {/* Top Cards: Status Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Active Engine Card */}
         <div className="p-4 rounded-xl bg-[#161b22] border border-[#30363d] relative overflow-hidden">
           <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
@@ -433,11 +433,11 @@ ROUTER_API_KEY=master_password_anda`;
         </div>
       </div>
 
-      {/* Database Switcher Navigation */}
-      <div className="border-b border-[#30363d] flex space-x-3">
+      {/* Database Switcher Navigation (Mobile Horizontal Touch Scroll) */}
+      <div className="border-b border-[#30363d] flex space-x-2 sm:space-x-3 overflow-x-auto no-scrollbar whitespace-nowrap pb-1">
         <button
           onClick={() => setSelectedDb('mongodb')}
-          className={`pb-3 px-3 text-xs font-semibold flex items-center space-x-2 border-b-2 transition ${
+          className={`pb-3 px-3 text-xs font-semibold flex items-center space-x-2 border-b-2 transition shrink-0 ${
             selectedDb === 'mongodb'
               ? 'border-emerald-500 text-emerald-400'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -452,7 +452,7 @@ ROUTER_API_KEY=master_password_anda`;
 
         <button
           onClick={() => setSelectedDb('supabase')}
-          className={`pb-3 px-3 text-xs font-semibold flex items-center space-x-2 border-b-2 transition ${
+          className={`pb-3 px-3 text-xs font-semibold flex items-center space-x-2 border-b-2 transition shrink-0 ${
             selectedDb === 'supabase'
               ? 'border-teal-500 text-teal-400'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -467,7 +467,7 @@ ROUTER_API_KEY=master_password_anda`;
 
         <button
           onClick={() => setSelectedDb('env')}
-          className={`pb-3 px-3 text-xs font-semibold flex items-center space-x-2 border-b-2 transition ${
+          className={`pb-3 px-3 text-xs font-semibold flex items-center space-x-2 border-b-2 transition shrink-0 ${
             selectedDb === 'env'
               ? 'border-cyan-500 text-cyan-400'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -477,6 +477,7 @@ ROUTER_API_KEY=master_password_anda`;
           <span>Environment Variables (.env)</span>
         </button>
       </div>
+
 
       {/* --- TAB 1: MONGODB CONFIGURATION --- */}
       {selectedDb === 'mongodb' && (

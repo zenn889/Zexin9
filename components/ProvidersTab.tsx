@@ -723,7 +723,7 @@ export function ProvidersTab({
                         )}
 
                         {/* Quick Add Custom Model for this provider */}
-                        <div className="flex items-center space-x-1.5 pt-1">
+                        <div className="flex items-center space-x-1.5 pt-1 min-w-0">
                           <input
                             type="text"
                             placeholder={`+ Tambah model baru (misal: deepseek-v4.1-flash)...`}
@@ -737,7 +737,7 @@ export function ProvidersTab({
                                 handleAddCustomModel(provider.id);
                               }
                             }}
-                            className="flex-1 bg-[#161b22] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1 text-[11px] font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                            className="flex-1 min-w-0 bg-[#161b22] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1 text-[11px] font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
                           />
                           <button
                             type="button"
@@ -749,6 +749,7 @@ export function ProvidersTab({
                             <span>Tambah</span>
                           </button>
                         </div>
+
                       </div>
 
                       {/* Ping Footer */}

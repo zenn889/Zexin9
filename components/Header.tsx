@@ -8,6 +8,7 @@ import {
   Globe,
   HardDrive,
   Lock,
+  Menu,
   RefreshCw,
   Shield,
   Terminal,
@@ -21,6 +22,7 @@ interface HeaderProps {
   onRefresh: () => void;
   onLogout?: () => void;
   onOpenSecurity?: () => void;
+  onToggleMobileMenu?: () => void;
 }
 
 export function Header({
@@ -30,6 +32,7 @@ export function Header({
   onRefresh,
   onLogout,
   onOpenSecurity,
+  onToggleMobileMenu,
 }: HeaderProps) {
   const [copiedUrl, setCopiedUrl] = useState(false);
 
@@ -43,27 +46,27 @@ export function Header({
 
   const titles: Record<string, { title: string; subtitle: string }> = {
     dashboard: {
-      title: 'Dashboard & Quota Tracking',
+      title: 'Dashboard & Quota',
       subtitle: 'Monitor token savings, quota health, and failover metrics across providers',
     },
     providers: {
-      title: 'Multi-Provider Pool & Key Management',
+      title: 'Provider Tiers (3-Tier)',
       subtitle: 'Manage Subscription, Cheap, and Free provider tiers with intelligent failover',
     },
     playground: {
-      title: 'Zexin9 Playground Console',
+      title: 'Playground Console',
       subtitle: 'Live interactive chat streaming with multi-tier failovers and RTK compression',
     },
     integrations: {
-      title: 'CLI & IDE Integration',
+      title: 'CLI & IDE Setup',
       subtitle: 'One-click configurations for Claude Code, Cursor, Cline, and Continue.dev',
     },
     database: {
-      title: 'Cloud Database Synchronization',
+      title: 'Database Cloud Sync',
       subtitle: 'Seamless cloud persistence with MongoDB Atlas or Supabase PostgreSQL',
     },
     deploy: {
-      title: 'Deploy & Publish (Vercel / Netlify)',
+      title: 'Deploy & Publish',
       subtitle: 'Deploy your Zexin9 gateway to the cloud with 1-click serverless setup & zero server costs',
     },
   };
@@ -74,43 +77,69 @@ export function Header({
   };
 
   return (
-    <header className="h-16 border-b border-slate-800/80 bg-[#070a14]/90 backdrop-blur-xl px-6 flex items-center justify-between sticky top-0 z-40">
-      <div>
-        <div className="flex items-center space-x-2">
-          <h1 className="text-sm sm:text-base font-extrabold text-white tracking-tight flex items-center space-x-2">
-            <span>{current.title}</span>
-          </h1>
-          <span className="hidden md:inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-800/60">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-            <span>v2.0</span>
-          </span>
+    <header className="h-14 sm:h-16 border-b border-slate-800/80 bg-[#070a14]/90 backdrop-blur-xl px-3 sm:px-6 flex items-center justify-between sticky top-0 z-30">
+      {/* Left: Mobile Hamburger Toggle + Title */}
+      <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+        {/* Mobile Hamburger Button */}
+        {onToggleMobileMenu && (
+          <button
+            onClick={onToggleMobileMenu}
+            className="md:hidden p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-300 hover:text-cyan-400 hover:bg-slate-800 transition active:scale-95 shrink-0"
+            title="Buka Menu Navigasi"
+          >
+            <Menu className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Mini Mobile Brand Icon */}
+        <div className="md:hidden w-7 h-7 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-white text-xs shadow-md shadow-cyan-500/20 shrink-0">
+          Z9
         </div>
-        <p className="text-xs text-slate-400 hidden sm:block font-medium">{current.subtitle}</p>
+
+        <div className="min-w-0">
+          <div className="flex items-center space-x-1.5 sm:space-x-2">
+            <h1 className="text-xs sm:text-base font-extrabold text-white tracking-tight truncate max-w-[130px] xs:max-w-[180px] sm:max-w-none">
+              {current.title}
+            </h1>
+            <span className="hidden md:inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-800/60">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+              <span>v2.0</span>
+            </span>
+          </div>
+          <p className="text-[11px] sm:text-xs text-slate-400 hidden lg:block font-medium truncate">
+            {current.subtitle}
+          </p>
+        </div>
       </div>
 
-      <div className="flex items-center space-x-3">
-        {/* Endpoint Pill */}
-        <div className="flex items-center space-x-2 bg-slate-900/90 border border-slate-800 hover:border-cyan-500/40 rounded-xl px-3 py-1.5 text-xs font-mono transition shadow-inner">
-          <span className="text-slate-400 hidden lg:inline">PROXY URL:</span>
-          <span className="text-cyan-400 font-semibold truncate max-w-[200px] sm:max-w-xs">{effectiveBaseUrl}</span>
-          <button
-            onClick={copyUrl}
-            className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition"
-            title="Copy Base URL"
-          >
-            {copiedUrl ? (
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-            ) : (
-              <Copy className="w-3.5 h-3.5" />
-            )}
-          </button>
-        </div>
+      {/* Right Controls */}
+      <div className="flex items-center space-x-1.5 sm:space-x-2.5 shrink-0">
+        {/* Endpoint Pill: Compact on mobile */}
+        <button
+          onClick={copyUrl}
+          className="flex items-center space-x-1.5 bg-slate-900/90 border border-slate-800 hover:border-cyan-500/50 rounded-xl px-2 sm:px-3 py-1.5 text-xs font-mono transition shadow-inner active:scale-95"
+          title={`Klik untuk menyalin Proxy URL: ${effectiveBaseUrl}`}
+        >
+          <Globe className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          <span className="text-slate-400 hidden xl:inline">PROXY:</span>
+          <span className="text-cyan-400 font-semibold hidden sm:inline truncate max-w-[120px] md:max-w-[200px]">
+            {effectiveBaseUrl.replace(/^https?:\/\//, '')}
+          </span>
+          <span className="text-cyan-400 font-bold sm:hidden text-[10px] tracking-wide">
+            URL
+          </span>
+          {copiedUrl ? (
+            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          ) : (
+            <Copy className="w-3.5 h-3.5 text-slate-400 hover:text-white shrink-0" />
+          )}
+        </button>
 
         {/* Refresh Status Button */}
         <button
           onClick={onRefresh}
-          className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 transition"
-          title="Refresh Status"
+          className="p-1.5 sm:p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 transition active:scale-95"
+          title="Refresh Status Gateway"
         >
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
@@ -119,11 +148,11 @@ export function Header({
         {onOpenSecurity && (
           <button
             onClick={onOpenSecurity}
-            className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-cyan-950/60 hover:border-cyan-500/50 border border-slate-800 text-slate-300 hover:text-cyan-300 transition flex items-center space-x-1.5 text-xs font-mono font-semibold"
+            className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-900 hover:bg-cyan-950/60 hover:border-cyan-500/50 border border-slate-800 text-slate-300 hover:text-cyan-300 transition flex items-center space-x-1.5 text-xs font-mono font-semibold active:scale-95"
             title="Pengaturan Keamanan & Kunci Akses"
           >
-            <Shield className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden sm:inline">Security Gate</span>
+            <Shield className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <span className="hidden md:inline">Security Gate</span>
           </button>
         )}
 
@@ -131,11 +160,11 @@ export function Header({
         {onLogout && (
           <button
             onClick={onLogout}
-            className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-rose-950/60 hover:border-rose-500/50 border border-slate-800 text-slate-300 hover:text-rose-300 transition flex items-center space-x-1.5 text-xs font-mono font-semibold"
+            className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-900 hover:bg-rose-950/60 hover:border-rose-500/50 border border-slate-800 text-slate-300 hover:text-rose-300 transition flex items-center space-x-1.5 text-xs font-mono font-semibold active:scale-95"
             title="Kunci Dashboard (Lock Web)"
           >
-            <Lock className="w-3.5 h-3.5 text-rose-400" />
-            <span className="hidden sm:inline">Kunci Web</span>
+            <Lock className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <span className="hidden md:inline">Kunci Web</span>
           </button>
         )}
       </div>
