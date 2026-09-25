@@ -28,15 +28,10 @@ export interface ClientToken {
 
 // In-memory runtime cache for serverless speed
 let memoryLogs: RequestLog[] = [];
-let memoryTokens: ClientToken[] = [
-  {
-    id: 'default-master',
-    name: 'Master / Default Client',
-    token: 'sk-9router-master-key',
-    createdAt: new Date().toISOString(),
-    requestCount: 0,
-  },
-];
+let memoryTokens: ClientToken[] = [];
+
+const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
 // Determine writable data file location (works in local dev and in Vercel /tmp)
 function getDataFilePath(): string {
@@ -63,21 +58,39 @@ function loadData() {
       if (Array.isArray(parsed.logs)) memoryLogs = parsed.logs;
       if (Array.isArray(parsed.tokens)) memoryTokens = parsed.tokens;
     }
-  } catch (err) {
+  } catch {
     // ignore read error, fallback to memory
   }
 }
 
 function persistData() {
+  const data = {
+    logs: memoryLogs.slice(0, 500), // retain latest 500 logs
+    tokens: memoryTokens,
+  };
+
+  // 1. Persist to local file or /tmp
   try {
     const filePath = getDataFilePath();
-    const data = {
-      logs: memoryLogs.slice(0, 500), // retain latest 500 logs
-      tokens: memoryTokens,
-    };
     fs.writeFileSync(filePath, JSON.stringify(data), 'utf-8');
   } catch {
     // serverless read-only fallback
+  }
+
+  // 2. Persist to Cloud Redis (Upstash / Vercel KV) if configured
+  if (redisUrl && redisToken) {
+    try {
+      fetch(`${redisUrl}/set/9router_state`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${redisToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(JSON.stringify(data)),
+      }).catch(() => {});
+    } catch {
+      // ignore async fetch error
+    }
   }
 }
 

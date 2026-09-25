@@ -45,20 +45,22 @@ export function Sidebar({
 }: SidebarProps) {
   const [copiedToken, setCopiedToken] = React.useState(false);
 
-  const effectiveToken = gatewaySecret || 'sk-9router-local';
+  const effectiveToken = gatewaySecret || 'Public (No Token Required)';
 
   const copyToken = () => {
-    navigator.clipboard.writeText(effectiveToken);
-    setCopiedToken(true);
-    setTimeout(() => setCopiedToken(false), 2000);
+    if (gatewaySecret) {
+      navigator.clipboard.writeText(gatewaySecret);
+      setCopiedToken(true);
+      setTimeout(() => setCopiedToken(false), 2000);
+    }
   };
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard & Quota', icon: Activity, badge: null },
     { id: 'providers', label: 'Provider Tiers (3-Tier)', icon: Cpu, badge: '13' },
-    { id: 'playground', label: 'Playground & Test', icon: Terminal, badge: 'Live' },
+    { id: 'playground', label: 'Playground', icon: Terminal, badge: 'Active' },
     { id: 'integrations', label: 'CLI & IDE Setup', icon: Layers, badge: null },
-    { id: 'deploy', label: 'Deploy Vercel / Netlify', icon: Rocket, badge: 'Cloud' },
+    { id: 'deploy', label: 'Deploy & Publish', icon: Rocket, badge: 'Cloud' },
   ];
 
   return (
@@ -72,11 +74,11 @@ export function Sidebar({
           <div>
             <div className="flex items-center space-x-1.5">
               <span className="font-extrabold text-lg tracking-tight text-white">9Router</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21262d] text-cyan-400 border border-[#30363d]">
-                v1.0
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+                PROD v1.0
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-mono">AI Gateway & Proxy</p>
+            <p className="text-[11px] text-slate-400 font-mono">High-Availability AI Gateway</p>
           </div>
         </div>
       </div>
@@ -84,16 +86,16 @@ export function Sidebar({
       {/* Gateway Status Pill */}
       <div className="px-4 py-3 mx-4 my-3 rounded-xl bg-[#161b22] border border-[#30363d]">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-slate-400 font-mono text-[11px]">STATUS:</span>
+          <span className="text-slate-400 font-mono text-[11px]">GATEWAY:</span>
           <span className="flex items-center space-x-1.5 text-emerald-400 font-semibold text-[11px]">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>PROXY ACTIVE</span>
+            <span>ONLINE & READY</span>
           </span>
         </div>
         <div className="mt-1.5 flex items-center justify-between text-[11px] font-mono text-slate-300">
-          <span className="text-slate-500">Port/Host:</span>
+          <span className="text-slate-500">Endpoint:</span>
           <span className="text-cyan-300 truncate max-w-[140px]" title={baseUrl}>
-            {baseUrl.replace(/^https?:\/\//, '') || 'localhost:3000'}
+            {baseUrl.replace(/^https?:\/\//, '') || 'Live Serverless'}
           </span>
         </div>
       </div>

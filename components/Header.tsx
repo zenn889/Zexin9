@@ -40,16 +40,16 @@ export function Header({ activeTab, baseUrl, isOnline, onRefresh }: HeaderProps)
       subtitle: 'Manage Subscription, Cheap, and Free provider tiers with auto-failover',
     },
     playground: {
-      title: 'Playground & Prompt Tester',
-      subtitle: 'Test live chat streaming, failovers, and RTK token compression in real-time',
+      title: 'Playground Console',
+      subtitle: 'Live interactive chat streaming with multi-tier failovers and RTK compression',
     },
     integrations: {
       title: 'CLI & IDE Integration',
       subtitle: 'One-click configurations for Claude Code, Cursor, Cline, and Continue.dev',
     },
     deploy: {
-      title: 'Cloud Deploy (Vercel / Netlify)',
-      subtitle: 'Deploy 9Router to the cloud for free 24/7 serverless accessibility',
+      title: 'Deploy & Publish (Vercel / Netlify)',
+      subtitle: 'Deploy your 9Router to the cloud with 1-click serverless setup & zero server costs',
     },
   };
 

@@ -2,8 +2,8 @@
 
 > AI Gateway & Multi-Tier Proxy dengan fitur Automatic Fallback, RTK Token Saver, dan kompatibilitas ganda (OpenAI & Anthropic API) yang siap dijalankan secara gratis di **Vercel** atau **Netlify**.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fzenn889%2FZexin9&project-name=zexin9-router&repository-name=Zexin9)
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/zenn889/Zexin9)
 
 ---
 

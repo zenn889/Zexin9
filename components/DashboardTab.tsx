@@ -145,14 +145,14 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
     setTimeout(() => setCopiedTokenId(null), 2000);
   };
 
-  // Aggregate stats calculated from real logs if available
-  const totalRequestsCount = logs.length > 0 ? logs.length : 48;
-  const failoverCount = logs.filter((l) => l.fallbackCount > 0).length || 3;
-  const totalTokensSaved = logs.reduce((acc, l) => acc + (l.tokensSaved || 0), 0) || 16420;
+  // Real production metrics calculated from live request logs
+  const totalRequestsCount = logs.length;
+  const failoverCount = logs.filter((l) => l.fallbackCount > 0).length;
+  const totalTokensSaved = logs.reduce((acc, l) => acc + (l.tokensSaved || 0), 0);
   const avgLatency =
     logs.length > 0
       ? Math.round(logs.reduce((acc, l) => acc + (l.latencyMs || 0), 0) / logs.length)
-      : 235;
+      : 0;
 
   const filteredLogs = logs.filter((l) => {
     if (!filterModel) return true;
@@ -212,7 +212,7 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
             <Activity className="w-4 h-4 text-cyan-400" />
           </div>
           <div className="text-2xl font-black text-white font-mono">{totalRequestsCount}</div>
-          <div className="text-[11px] text-slate-400 mt-1">Routed via 9Router proxy</div>
+          <div className="text-[11px] text-slate-400 mt-1">Routed via production proxy</div>
         </div>
 
         {/* Card 2: RTK Tokens Saved */}
@@ -222,9 +222,9 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
             <Zap className="w-4 h-4 text-amber-400" />
           </div>
           <div className="text-2xl font-black text-amber-400 font-mono">
-            ~{totalTokensSaved.toLocaleString()}
+            {totalTokensSaved.toLocaleString()}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">~34% Input tokens compressed</div>
+          <div className="text-[11px] text-slate-400 mt-1">RTK Token Saver compressed</div>
         </div>
 
         {/* Card 3: Auto-Failovers */}
@@ -243,69 +243,83 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
             <span>AVG LATENCY</span>
             <Clock className="w-4 h-4 text-[#58a6ff]" />
           </div>
-          <div className="text-2xl font-black text-[#58a6ff] font-mono">{avgLatency} ms</div>
-          <div className="text-[11px] text-slate-400 mt-1">Fast edge response speed</div>
+          <div className="text-2xl font-black text-[#58a6ff] font-mono">
+            {avgLatency > 0 ? `${avgLatency} ms` : '—'}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">Edge response latency</div>
         </div>
       </div>
 
-      {/* 9Router Quota & Health Status Bars */}
+      {/* 3-Tier Fallback Pool Health & Architecture */}
       <div className="p-5 rounded-xl bg-[#161b22] border border-[#30363d] space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h3 className="font-bold text-white text-sm">Provider Quota & Health Monitor</h3>
+            <h3 className="font-bold text-white text-sm">3-Tier Fallback Gateway Architecture</h3>
             <p className="text-xs text-slate-400">
-              Live status and estimated quota availability for each AI provider tier.
+              Automatic zero-downtime failover cascade across Subscription, Cheap, and Free tiers.
             </p>
           </div>
-          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#21262d] text-cyan-400 border border-[#30363d]">
-            3-Tier Fallback Pool
-          </span>
+          <button
+            onClick={() => onSelectTab('providers')}
+            className="text-xs font-mono px-3 py-1.5 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-cyan-400 border border-[#30363d] transition self-start sm:self-auto flex items-center space-x-1"
+          >
+            <span>Manage Keys & Models</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
 
-        <div className="space-y-3 pt-1">
-          {/* Anthropic Tier */}
-          <div className="space-y-1">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+          {/* Tier 1 */}
+          <div className="p-4 rounded-xl bg-[#0d1117] border border-orange-900/40 space-y-2.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-slate-200">1. Anthropic Claude (Subscription Tier)</span>
-              <span className="font-mono text-orange-400 text-[11px]">Primary • Rate Limit Fallback Ready</span>
-            </div>
-            <div className="w-full bg-[#0d1117] h-2 rounded-full overflow-hidden border border-[#30363d]">
-              <div className="bg-gradient-to-r from-orange-500 to-amber-500 h-full w-[72%]" />
-            </div>
-          </div>
-
-          {/* OpenAI Tier */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-slate-200">2. OpenAI GPT-4o & o3 (Subscription Tier)</span>
-              <span className="font-mono text-emerald-400 text-[11px]">Secondary • Healthy</span>
-            </div>
-            <div className="w-full bg-[#0d1117] h-2 rounded-full overflow-hidden border border-[#30363d]">
-              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 h-full w-[85%]" />
-            </div>
-          </div>
-
-          {/* DeepSeek / SiliconFlow Tier */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-slate-200">3. DeepSeek V3/R1 & SiliconFlow (Cheap Tier)</span>
-              <span className="font-mono text-cyan-400 text-[11px]">Pay-As-You-Go • Ultra Low Cost</span>
-            </div>
-            <div className="w-full bg-[#0d1117] h-2 rounded-full overflow-hidden border border-[#30363d]">
-              <div className="bg-gradient-to-r from-blue-500 to-cyan-500 h-full w-[94%]" />
-            </div>
-          </div>
-
-          {/* Free Tier: Gemini, Groq, Cloudflare */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-slate-200">
-                4. Google Gemini & Cloudflare Workers AI & Groq (Free Tier Safety Net)
+              <span className="font-bold text-orange-400">Tier 1: Frontier</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-orange-950/80 text-orange-300 border border-orange-800">
+                Primary
               </span>
-              <span className="font-mono text-emerald-300 text-[11px]">Free Unlimited Quotas</span>
             </div>
-            <div className="w-full bg-[#0d1117] h-2 rounded-full overflow-hidden border border-[#30363d]">
-              <div className="bg-gradient-to-r from-emerald-400 to-cyan-400 h-full w-[100%]" />
+            <div className="text-xs font-bold text-white">Claude 3.7/3.5 & GPT-4o</div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Highest reasoning intelligence for complex coding tasks. Intercepts 429 rate limits.
+            </p>
+            <div className="pt-2 border-t border-[#30363d]/60 flex items-center justify-between text-[11px] font-mono">
+              <span className="text-slate-500">Failover Target:</span>
+              <span className="text-cyan-400 font-semibold">Tier 2 Backup</span>
+            </div>
+          </div>
+
+          {/* Tier 2 */}
+          <div className="p-4 rounded-xl bg-[#0d1117] border border-cyan-900/40 space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-cyan-400">Tier 2: Low-Cost Backup</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800">
+                Pay-As-You-Go
+              </span>
+            </div>
+            <div className="text-xs font-bold text-white">DeepSeek V4.1/V3 & SiliconFlow</div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Ultra-affordable frontier intelligence (DeepSeek, Mistral, Together, OpenRouter).
+            </p>
+            <div className="pt-2 border-t border-[#30363d]/60 flex items-center justify-between text-[11px] font-mono">
+              <span className="text-slate-500">Failover Target:</span>
+              <span className="text-emerald-400 font-semibold">Tier 3 Safety Net</span>
+            </div>
+          </div>
+
+          {/* Tier 3 */}
+          <div className="p-4 rounded-xl bg-[#0d1117] border border-emerald-900/40 space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-emerald-400">Tier 3: Free & Edge LPU</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800">
+                Safety Net
+              </span>
+            </div>
+            <div className="text-xs font-bold text-white">Gemini 2.0, Groq & Cloudflare</div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Generous free-tier quotas & up to 1,800 tok/s LPU inference. Never get blocked!
+            </p>
+            <div className="pt-2 border-t border-[#30363d]/60 flex items-center justify-between text-[11px] font-mono">
+              <span className="text-slate-500">Reliability:</span>
+              <span className="text-emerald-400 font-bold">Continuous Uptime</span>
             </div>
           </div>
         </div>

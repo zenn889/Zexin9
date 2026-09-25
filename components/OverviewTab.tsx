@@ -163,7 +163,7 @@ export function OverviewTab({ onSelectTab, configuredCount }: OverviewTabProps) 
               <h2 className="text-xl font-bold text-white tracking-tight flex items-center space-x-2">
                 <span>Interactive Failover Simulator</span>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/60 font-mono">
-                  Live Demo
+                  Production Engine
                 </span>
               </h2>
             </div>

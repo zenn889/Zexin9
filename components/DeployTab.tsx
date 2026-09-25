@@ -102,6 +102,18 @@ export function DeployTab() {
       badgeClass: 'text-teal-400 bg-teal-950/80 border-teal-800',
       desc: 'Perplexity AI Key (Sonar models with live internet citations).',
     },
+    {
+      name: 'UPSTASH_REDIS_REST_URL',
+      status: 'Database',
+      badgeClass: 'text-rose-400 bg-rose-950/80 border-rose-800',
+      desc: 'Upstash Redis REST URL (Optional cloud persistent database for request logs and client keys).',
+    },
+    {
+      name: 'UPSTASH_REDIS_REST_TOKEN',
+      status: 'Database',
+      badgeClass: 'text-rose-400 bg-rose-950/80 border-rose-800',
+      desc: 'Upstash Redis REST Token (Found in your Upstash Redis Console).',
+    },
   ];
 
   return (
@@ -156,6 +168,18 @@ export function DeployTab() {
             </div>
           </div>
 
+          {/* 1-Click Deploy Button */}
+          <a
+            href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fzenn889%2FZexin9&project-name=zexin9-router&repository-name=Zexin9"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-3 rounded-xl bg-white hover:bg-slate-200 text-slate-950 font-black text-xs transition flex items-center justify-center space-x-2 shadow-lg hover:scale-[1.02] active:scale-95"
+          >
+            <span className="text-sm font-bold">▲</span>
+            <span>1-Click Deploy to Vercel</span>
+            <ExternalLink className="w-3.5 h-3.5 ml-1" />
+          </a>
+
           <div className="space-y-2 pt-4 border-t border-slate-800/80">
             <div className="flex items-center justify-between text-xs font-mono text-slate-400">
               <span>Deploy instantly via CLI:</span>
@@ -199,13 +223,25 @@ export function DeployTab() {
                 Deployment Steps:
               </div>
               <ol className="list-decimal list-inside space-y-1.5 pl-1 text-slate-300">
-                <li>Push this repository to <strong>GitHub</strong> or <strong>GitLab</strong>.</li>
-                <li>Go to <a href="https://app.netlify.com/start" target="_blank" rel="noreferrer" className="text-teal-400 underline font-semibold">app.netlify.com/start</a> and link repository.</li>
+                <li>Repository is hosted on your <strong>GitHub (zenn889/Zexin9)</strong>.</li>
+                <li>Click the 1-Click button below or link repository on Netlify.</li>
                 <li>Add your Environment Variables in <strong>Site Configuration</strong>.</li>
                 <li>Click <strong>Deploy Site</strong>!</li>
               </ol>
             </div>
           </div>
+
+          {/* 1-Click Deploy Button */}
+          <a
+            href="https://app.netlify.com/start/deploy?repository=https://github.com/zenn889/Zexin9"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-3 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs transition flex items-center justify-center space-x-2 shadow-lg shadow-teal-500/20 hover:scale-[1.02] active:scale-95"
+          >
+            <span className="text-sm font-bold">◇</span>
+            <span>1-Click Deploy to Netlify</span>
+            <ExternalLink className="w-3.5 h-3.5 ml-1" />
+          </a>
 
           <div className="space-y-2 pt-4 border-t border-slate-800/80">
             <div className="flex items-center justify-between text-xs font-mono text-slate-400">
