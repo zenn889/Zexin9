@@ -31,6 +31,18 @@ export function DeployTab() {
       desc: 'Master secret password for your gateway. If set, clients must pass this token in Authorization: Bearer.',
     },
     {
+      name: 'MONGODB_URI',
+      status: 'Database (Atlas)',
+      badgeClass: 'text-emerald-400 bg-emerald-950/80 border-emerald-800',
+      desc: 'MongoDB Atlas connection URI. Permanently persists Master Key, tokens, and request logs.',
+    },
+    {
+      name: 'SUPABASE_URL',
+      status: 'Database (Postgres)',
+      badgeClass: 'text-teal-400 bg-teal-950/80 border-teal-800',
+      desc: 'Supabase Project URL. Set together with SUPABASE_SERVICE_ROLE_KEY for PostgreSQL cloud persistence.',
+    },
+    {
       name: 'GEMINI_API_KEY',
       status: 'Free Tier',
       badgeClass: 'text-emerald-400 bg-emerald-950/80 border-emerald-800',

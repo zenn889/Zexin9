@@ -8,6 +8,7 @@ import { ProvidersTab } from '@/components/ProvidersTab';
 import { PlaygroundTab } from '@/components/PlaygroundTab';
 import { IntegrationsTab } from '@/components/IntegrationsTab';
 import { DeployTab } from '@/components/DeployTab';
+import { DatabaseTab } from '@/components/DatabaseTab';
 import { LoginModal } from '@/components/LoginModal';
 import { SecurityModal } from '@/components/SecurityModal';
 
@@ -208,6 +209,8 @@ export default function Home() {
               gatewaySecret={gatewaySecret}
             />
           )}
+
+          {activeTab === 'database' && <DatabaseTab />}
 
           {activeTab === 'deploy' && <DeployTab />}
         </main>

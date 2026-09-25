@@ -7,6 +7,7 @@ import {
   Coins,
   Copy,
   Cpu,
+  Database,
   Flame,
   Globe2,
   Key,
@@ -64,6 +65,7 @@ export function Sidebar({
     { id: 'dashboard', label: 'Dashboard & Quota', icon: Activity, badge: null },
     { id: 'providers', label: 'Provider Tiers (3-Tier)', icon: Cpu, badge: '13' },
     { id: 'playground', label: 'Playground', icon: Terminal, badge: 'Active' },
+    { id: 'database', label: 'Database (Mongo/Supa)', icon: Database, badge: 'Cloud' },
     { id: 'integrations', label: 'CLI & IDE Setup', icon: Layers, badge: null },
     { id: 'deploy', label: 'Deploy & Publish', icon: Rocket, badge: 'Cloud' },
   ];
