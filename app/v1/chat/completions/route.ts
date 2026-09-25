@@ -1,10 +1,11 @@
 import { getGatewaySecret } from '@/lib/config';
+import { db } from '@/lib/db';
 import { routeChatCompletion } from '@/lib/router';
 import { ChatCompletionRequest } from '@/lib/types';
 import { NextRequest } from 'next/server';
 
-export const runtime = 'nodejs'; // or 'edge'
-export const maxDuration = 60; // Max execution time for Vercel/Netlify functions
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -20,19 +21,24 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: NextRequest) {
+  const startTime = Date.now();
+
   try {
-    // 1. Gateway Authentication Check (if ROUTER_API_KEY or GATEWAY_SECRET is set)
-    const gatewaySecret = getGatewaySecret();
+    // 1. Gateway Authentication Check (via master key or client token in db)
     const authHeader = req.headers.get('authorization') || '';
     const xApiKey = req.headers.get('x-api-key') || '';
     const clientToken = authHeader.replace(/^Bearer\s+/i, '').trim() || xApiKey.trim();
 
-    if (gatewaySecret && gatewaySecret.trim().length > 0) {
-      if (clientToken !== gatewaySecret.trim()) {
+    const gatewaySecret = getGatewaySecret();
+    const hasSecretConfigured = Boolean(gatewaySecret && gatewaySecret.trim().length > 0);
+
+    if (hasSecretConfigured) {
+      const isValid = db.verifyToken(clientToken);
+      if (!isValid) {
         return new Response(
           JSON.stringify({
             error: {
-              message: 'Unauthorized: Invalid or missing Router Gateway API Key.',
+              message: 'Unauthorized: Invalid or missing Router Gateway API Key / Bearer Token.',
               type: 'invalid_request_error',
               code: 'unauthorized',
             },
@@ -68,7 +74,7 @@ export async function POST(req: NextRequest) {
     const enableCompression =
       req.headers.get('x-router-optimize') === 'true' ||
       req.headers.get('x-router-compress') === 'true' ||
-      body.stream !== false; // Default optimization enabled
+      body.stream !== false;
 
     const cavemanMode =
       req.headers.get('x-caveman-mode') === 'true' ||
@@ -81,7 +87,30 @@ export async function POST(req: NextRequest) {
       { enableCompression, cavemanMode }
     );
 
-    // 5. Build response headers
+    const latencyMs = Date.now() - startTime;
+    const promptTokens = Math.round(JSON.stringify(body.messages).length / 4);
+
+    // 5. Record request in database
+    db.addLog({
+      id: `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      client: clientToken ? clientToken.slice(0, 16) + '...' : 'Open Client',
+      requestedModel: body.model,
+      servedProvider: result.servedBy,
+      servedModel: result.servedModel,
+      fallbackCount: result.fallbackCount,
+      failoverNote:
+        result.fallbackCount > 0
+          ? `Auto-failover tier ${result.fallbackCount} triggered`
+          : 'Direct route (Tier 1)',
+      promptTokens,
+      completionTokens: 35, // average initial estimate
+      tokensSaved: result.tokensSaved,
+      latencyMs,
+      status: result.response.status,
+    });
+
+    // 6. Build response headers
     const responseHeaders = new Headers(result.response.headers);
     Object.entries(CORS_HEADERS).forEach(([k, v]) => responseHeaders.set(k, v));
     responseHeaders.set('x-router-provider', result.servedBy);

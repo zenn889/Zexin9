@@ -8,6 +8,7 @@ import { ProvidersTab } from '@/components/ProvidersTab';
 import { PlaygroundTab } from '@/components/PlaygroundTab';
 import { IntegrationsTab } from '@/components/IntegrationsTab';
 import { DeployTab } from '@/components/DeployTab';
+import { LoginModal } from '@/components/LoginModal';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -19,6 +20,10 @@ export default function Home() {
   const [baseUrls, setBaseUrls] = useState<Record<string, string>>({});
   const [rtkEnabled, setRtkEnabled] = useState(true);
   const [cavemanEnabled, setCavemanEnabled] = useState(false);
+
+  // Security / Auth states
+  const [authRequired, setAuthRequired] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -44,25 +49,20 @@ export default function Home() {
       }
     }
 
-    refreshStatus();
+    checkAuthAndStatus();
   }, []);
 
-  const handleRtkToggle = (val: boolean) => {
-    setRtkEnabled(val);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('9router_rtk', String(val));
-    }
-  };
-
-  const handleCavemanToggle = (val: boolean) => {
-    setCavemanEnabled(val);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('9router_caveman', String(val));
-    }
-  };
-
-  const refreshStatus = async () => {
+  const checkAuthAndStatus = async () => {
     try {
+      // Check auth status
+      const authRes = await fetch('/api/auth');
+      if (authRes.ok) {
+        const authData = await authRes.json();
+        setAuthRequired(Boolean(authData.authRequired));
+        setIsAuthenticated(Boolean(authData.isAuthenticated));
+      }
+
+      // Check gateway status
       const res = await fetch('/api/status');
       if (res.ok) {
         const data = await res.json();
@@ -82,12 +82,31 @@ export default function Home() {
     }
   };
 
+  const handleRtkToggle = (val: boolean) => {
+    setRtkEnabled(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('9router_rtk', String(val));
+    }
+  };
+
+  const handleCavemanToggle = (val: boolean) => {
+    setCavemanEnabled(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('9router_caveman', String(val));
+    }
+  };
+
   const configuredCount = Object.keys(keys).filter((k) => keys[k]?.trim().length > 0)
     .concat(Object.keys(envConfigured).filter((k) => envConfigured[k]))
     .filter((v, i, a) => a.indexOf(v) === i).length;
 
   return (
     <div className="min-h-screen flex bg-[#0d1117] text-slate-100 font-sans">
+      {/* Security Gate: If auth is required and user not authenticated, show Login Modal */}
+      {authRequired && !isAuthenticated && (
+        <LoginModal onLoginSuccess={() => setIsAuthenticated(true)} />
+      )}
+
       {/* 9Router Authentic Left Sidebar */}
       <Sidebar
         activeTab={activeTab}
@@ -108,7 +127,7 @@ export default function Home() {
           activeTab={activeTab}
           baseUrl={baseUrl}
           isOnline={isGatewayOnline}
-          onRefresh={refreshStatus}
+          onRefresh={checkAuthAndStatus}
         />
 
         {/* Dynamic Tab Body */}
@@ -129,7 +148,7 @@ export default function Home() {
               gatewaySecret={gatewaySecret}
               setGatewaySecret={setGatewaySecret}
               envConfigured={envConfigured}
-              onRefreshStatus={refreshStatus}
+              onRefreshStatus={checkAuthAndStatus}
             />
           )}
 

@@ -1,4 +1,5 @@
 import { getGatewaySecret } from '@/lib/config';
+import { db } from '@/lib/db';
 import { routeChatCompletion } from '@/lib/router';
 import { ChatCompletionRequest, ChatMessage } from '@/lib/types';
 import { NextRequest } from 'next/server';
@@ -20,6 +21,8 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: NextRequest) {
+  const startTime = Date.now();
+
   try {
     const gatewaySecret = getGatewaySecret();
     const clientKey =
@@ -27,12 +30,15 @@ export async function POST(req: NextRequest) {
       req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||
       '';
 
-    if (gatewaySecret && gatewaySecret.trim().length > 0) {
-      if (clientKey.trim() !== gatewaySecret.trim()) {
+    const hasSecretConfigured = Boolean(gatewaySecret && gatewaySecret.trim().length > 0);
+
+    if (hasSecretConfigured) {
+      const isValid = db.verifyToken(clientKey);
+      if (!isValid) {
         return new Response(
           JSON.stringify({
             type: 'error',
-            error: { type: 'authentication_error', message: 'Invalid API Key' },
+            error: { type: 'authentication_error', message: 'Invalid API Key / Bearer Token' },
           }),
           { status: 401, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
         );
@@ -79,6 +85,28 @@ export async function POST(req: NextRequest) {
     });
 
     const result = await routeChatCompletion(openAIRequest, headerKeys);
+    const latencyMs = Date.now() - startTime;
+    const promptTokens = Math.round(JSON.stringify(messages).length / 4);
+
+    // Log request
+    db.addLog({
+      id: `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      client: clientKey ? clientKey.slice(0, 16) + '...' : 'Claude Code CLI',
+      requestedModel: model,
+      servedProvider: result.servedBy,
+      servedModel: result.servedModel,
+      fallbackCount: result.fallbackCount,
+      failoverNote:
+        result.fallbackCount > 0
+          ? `Failover to ${result.servedBy}`
+          : 'Claude Code Direct Route',
+      promptTokens,
+      completionTokens: 40,
+      tokensSaved: result.tokensSaved,
+      latencyMs,
+      status: result.response.status,
+    });
 
     // Return the response directly
     const responseHeaders = new Headers(result.response.headers);
