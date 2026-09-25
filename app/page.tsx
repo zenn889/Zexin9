@@ -144,7 +144,7 @@ export default function Home() {
   // 1. Loading screen while verifying auth
   if (authChecking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#060913] text-cyan-400">
+      <div className="min-h-screen flex items-center justify-center bg-[#07090e] text-cyan-400">
         <div className="flex flex-col items-center space-y-3">
           <div className="relative">
             <div className="absolute -inset-2 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-2xl blur-md opacity-60 animate-pulse" />
@@ -161,7 +161,7 @@ export default function Home() {
   // 2. Security Gate: If not authenticated, show ONLY LoginModal
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#060913]">
+      <div className="min-h-screen bg-transparent">
         <LoginModal
           hasMasterKey={hasMasterKey}
           onLoginSuccess={() => {
@@ -174,7 +174,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex bg-[#060913] text-slate-100 font-sans">
+    <div className="min-h-screen flex bg-transparent text-slate-100 font-sans">
       {/* Zexin9 Authentic Left Sidebar (Desktop + Mobile Drawer + Bottom Nav) */}
       <Sidebar
         activeTab={activeTab}
@@ -194,7 +194,7 @@ export default function Home() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#060913] w-full overflow-x-hidden">
+      <div className="flex-1 flex flex-col min-w-0 bg-transparent w-full overflow-x-hidden">
         {/* Top Header */}
         <Header
           activeTab={activeTab}

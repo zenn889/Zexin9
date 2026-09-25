@@ -752,24 +752,24 @@ export function PlaygroundTab({
       <div
         className={`${
           isSessionsDrawerOpen ? 'w-full lg:w-72 block' : 'hidden'
-        } shrink-0 bg-gradient-to-b from-[#0f172a]/80 to-[#070b14]/90 border border-slate-800/90 rounded-2xl p-4 flex flex-col justify-between shadow-xl backdrop-blur-xl transition-all`}
+        } shrink-0 pro-card p-4 flex flex-col justify-between shadow-xl transition-all`}
       >
         <div className="space-y-3.5">
           {/* Top Session Actions */}
-          <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+          <div className="flex items-center justify-between pb-2.5 border-b border-white/[0.06]">
             <div className="flex items-center space-x-2">
               <MessageSquare className="w-4 h-4 text-cyan-400" />
-              <h3 className="font-bold text-xs font-mono uppercase tracking-wider text-slate-200">
+              <h3 className="font-semibold text-xs font-mono uppercase tracking-wider text-slate-200">
                 Riwayat Sesi
               </h3>
             </div>
             <div className="flex items-center space-x-2">
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-cyan-400 font-bold">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-cyan-300 font-medium">
                 {sessions.length}
               </span>
               <button
                 onClick={() => setIsSessionsDrawerOpen(false)}
-                className="lg:hidden p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                className="lg:hidden p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition"
                 title="Tutup Riwayat Sesi"
               >
                 <X className="w-4 h-4" />
@@ -780,7 +780,7 @@ export function PlaygroundTab({
           {/* New Chat Button */}
           <button
             onClick={handleCreateNewSession}
-            className="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-xs shadow-md shadow-cyan-500/20 transition flex items-center justify-center space-x-2 active:scale-98"
+            className="w-full py-2 px-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20 transition flex items-center justify-center space-x-2 active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Sesi Chat Baru</span>
@@ -794,9 +794,9 @@ export function PlaygroundTab({
                 placeholder="Cari sesi..."
                 value={sessionSearch}
                 onChange={(e) => setSessionSearch(e.target.value)}
-                className="w-full bg-[#090d16] border border-slate-800 focus:border-cyan-500/60 rounded-xl px-3 py-1.5 pl-8 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none shadow-inner"
+                className="input-pro w-full pl-8 py-1.5"
               />
-              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
             </div>
           )}
 
@@ -811,13 +811,13 @@ export function PlaygroundTab({
                   onClick={() => handleSelectSession(sess.id)}
                   className={`p-3 rounded-xl cursor-pointer border transition flex items-start justify-between group ${
                     isActive
-                      ? 'bg-slate-800/80 border-cyan-500/50 shadow-md shadow-cyan-950/40 text-white'
-                      : 'bg-slate-900/40 border-slate-800/60 hover:bg-slate-800/40 hover:border-slate-700/80 text-slate-400'
+                      ? 'bg-white/[0.08] border-white/[0.12] text-white shadow-sm'
+                      : 'bg-black/30 border-white/[0.04] hover:bg-white/[0.03] hover:border-white/[0.08] text-slate-400'
                   }`}
                 >
                   <div className="space-y-1 min-w-0 pr-2">
-                    <div className="font-semibold text-xs truncate flex items-center space-x-1.5">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-cyan-400' : 'bg-slate-600'}`} />
+                    <div className="font-medium text-xs truncate flex items-center space-x-2">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-cyan-400 shadow-sm shadow-cyan-400/50' : 'bg-slate-600'}`} />
                       <span className="truncate">{sess.title}</span>
                     </div>
                     <div className="flex items-center space-x-2 text-[10px] font-mono text-slate-500">
@@ -829,7 +829,7 @@ export function PlaygroundTab({
 
                   <button
                     onClick={(e) => handleDeleteSession(sess.id, e)}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 transition shrink-0"
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition shrink-0"
                     title="Hapus Sesi"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -840,24 +840,24 @@ export function PlaygroundTab({
           </div>
         </div>
 
-        <div className="pt-3 border-t border-slate-800/80 text-[11px] font-mono text-slate-500 flex items-center justify-between">
+        <div className="pt-3 border-t border-white/[0.06] text-[10px] font-mono text-slate-500 flex items-center justify-between">
           <span>Otomatis Tersimpan</span>
-          <span className="text-emerald-400 font-bold">100% Persisten</span>
+          <span className="text-emerald-400 font-semibold">100% Persisten</span>
         </div>
       </div>
 
       {/* --- MAIN PLAYGROUND CONSOLE --- */}
       <div className="flex-1 space-y-4 sm:space-y-5 min-w-0">
         {/* Playground Header Controls */}
-        <div className="p-3 sm:p-5 rounded-2xl border border-slate-800/80 bg-gradient-to-b from-[#0f172a]/70 to-[#070b14]/90 backdrop-blur-xl flex flex-wrap items-center justify-between gap-3 shadow-xl">
+        <div className="pro-card p-3 sm:p-4 flex flex-wrap items-center justify-between gap-3 shadow-xl">
           {/* Left Controls: Drawer Toggle + Model Selector */}
           <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
             <button
               onClick={() => setIsSessionsDrawerOpen(!isSessionsDrawerOpen)}
-              className={`p-2 rounded-xl border transition shrink-0 ${
+              className={`p-2 rounded-xl border transition shrink-0 active:scale-95 ${
                 isSessionsDrawerOpen
-                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-cyan-300 hover:border-cyan-500/40'
+                  ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                  : 'bg-white/[0.03] border-white/[0.08] text-slate-300 hover:text-white hover:bg-white/[0.06]'
               }`}
               title={isSessionsDrawerOpen ? 'Tutup Riwayat Sesi' : 'Buka Riwayat Sesi'}
             >
@@ -865,13 +865,13 @@ export function PlaygroundTab({
             </button>
 
             <div className="flex items-center space-x-1.5 sm:space-x-2 min-w-0 flex-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono hidden xs:inline shrink-0">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 font-mono hidden xs:inline shrink-0">
                 Model:
               </label>
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
-                className="w-full sm:w-auto bg-slate-950 border border-slate-700/80 text-cyan-300 font-mono text-xs font-bold rounded-xl px-2.5 sm:px-3.5 py-1.5 sm:py-2 focus:outline-none focus:border-cyan-500 shadow-inner truncate max-w-full"
+                className="w-full sm:w-auto input-pro font-mono text-xs font-semibold text-cyan-300 truncate max-w-full"
               >
                 <optgroup label="⭐ Virtual Multi-Tier Groups (Auto-Failover)">
                   {DEFAULT_FALLBACK_GROUPS.map((g) => (
@@ -962,7 +962,7 @@ export function PlaygroundTab({
               key={idx}
               onClick={() => handleSend(p.prompt)}
               disabled={isLoading}
-              className="text-xs px-3 py-1 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-300 transition active:scale-95"
+              className="text-xs px-3 py-1 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.08] text-slate-300 hover:text-white transition active:scale-95 whitespace-nowrap"
             >
               {p.label}
             </button>
@@ -975,8 +975,8 @@ export function PlaygroundTab({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={`rounded-2xl sm:rounded-3xl border ${
-            isDraggingFile ? 'border-cyan-400 bg-cyan-950/20' : 'border-slate-800/90 bg-[#070b14]/90'
-          } p-3 sm:p-6 min-h-[420px] max-h-[580px] overflow-y-auto flex flex-col space-y-4 sm:space-y-5 shadow-2xl backdrop-blur-xl relative`}
+            isDraggingFile ? 'border-cyan-400 bg-cyan-950/20' : 'border-white/[0.07] bg-[#07090e]/90'
+          } p-3.5 sm:p-6 min-h-[420px] max-h-[580px] overflow-y-auto flex flex-col space-y-4 sm:space-y-5 shadow-2xl backdrop-blur-xl relative`}
         >
           {/* Drag & drop overlay banner */}
           {isDraggingFile && (
@@ -1000,13 +1000,13 @@ export function PlaygroundTab({
               >
                 {/* Avatar Icon */}
                 <div
-                  className={`w-7 h-7 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 text-white shadow-md ${
+                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center shrink-0 text-white shadow-md ${
                     isUser
                       ? 'bg-gradient-to-tr from-cyan-500 to-blue-600'
-                      : 'bg-slate-900 border border-slate-700/80 text-cyan-400'
+                      : 'bg-white/[0.04] border border-white/[0.1] text-cyan-400'
                   }`}
                 >
-                  {isUser ? <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                  {isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
                 </div>
 
                 {/* Message Body */}
@@ -1015,7 +1015,7 @@ export function PlaygroundTab({
                     className={`p-3.5 sm:p-5 rounded-2xl text-xs sm:text-sm leading-relaxed whitespace-pre-wrap relative group shadow-md ${
                       isUser
                         ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-medium rounded-tr-none'
-                        : 'bg-slate-900/90 border border-slate-800 text-slate-200 rounded-tl-none font-sans'
+                        : 'bg-white/[0.03] border border-white/[0.07] text-slate-200 rounded-tl-none font-sans'
                     }`}
                   >
 
@@ -1063,14 +1063,14 @@ export function PlaygroundTab({
                           return (
                             <div
                               key={pIdx}
-                              className="rounded-xl overflow-hidden border border-slate-800 bg-[#060913] shadow-lg my-2"
+                              className="rounded-xl overflow-hidden border border-white/[0.08] bg-black/60 shadow-lg my-2.5"
                             >
                               {/* File Header Bar */}
-                              <div className="flex items-center justify-between px-3.5 py-2 bg-slate-950 border-b border-slate-800/80 text-xs font-mono">
-                                <div className="flex items-center space-x-2 text-cyan-300 font-bold truncate">
+                              <div className="flex items-center justify-between px-3.5 py-2 bg-black/80 border-b border-white/[0.06] text-xs font-mono">
+                                <div className="flex items-center space-x-2 text-cyan-300 font-semibold truncate">
                                   <FileCode className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                                   <span className="truncate">{displayFilename}</span>
-                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-900 border border-slate-800 text-slate-400 uppercase font-semibold">
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-slate-400 uppercase font-medium">
                                     {part.language || 'code'}
                                   </span>
                                 </div>
@@ -1081,17 +1081,17 @@ export function PlaygroundTab({
                                     onClick={() =>
                                       downloadCodeFile(part.content, part.language || 'txt', part.filename)
                                     }
-                                    className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-emerald-300 transition flex items-center space-x-1 text-[11px]"
+                                    className="p-1 px-2 rounded-lg hover:bg-white/[0.06] text-slate-400 hover:text-emerald-300 transition flex items-center space-x-1 text-[11px]"
                                     title="Download File ini ke Komputer"
                                   >
                                     <Download className="w-3.5 h-3.5 text-emerald-400" />
-                                    <span className="hidden sm:inline">Download File</span>
+                                    <span className="hidden sm:inline">Download</span>
                                   </button>
 
                                   {/* Copy Code Button */}
                                   <button
                                     onClick={() => copyCodeSegment(codeBlockId, part.content)}
-                                    className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-cyan-300 transition flex items-center space-x-1 text-[11px]"
+                                    className="p-1 px-2 rounded-lg hover:bg-white/[0.06] text-slate-400 hover:text-cyan-300 transition flex items-center space-x-1 text-[11px]"
                                     title="Salin Kode"
                                   >
                                     {isCopied ? (
@@ -1150,13 +1150,13 @@ export function PlaygroundTab({
                         </span>
                       )}
                       {msg.meta.tokensPerSec !== undefined && msg.meta.tokensPerSec > 0 && (
-                        <span className="flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-slate-900 text-slate-300 border border-slate-800">
+                        <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full bg-white/[0.04] text-slate-300 border border-white/[0.08]">
                           <Gauge className="w-3 h-3 text-indigo-400" />
                           <span>{msg.meta.tokensPerSec} tok/s</span>
                         </span>
                       )}
                       {msg.meta.tokensSaved !== undefined && msg.meta.tokensSaved > 0 && (
-                        <span className="flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
+                        <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-medium">
                           <Coins className="w-3 h-3 text-emerald-400" />
                           <span>~{msg.meta.tokensSaved} tokens saved</span>
                         </span>
@@ -1171,11 +1171,11 @@ export function PlaygroundTab({
           {/* Streaming In-Progress */}
           {isLoading && currentResponse && (
             <div className="flex items-start space-x-3.5">
-              <div className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0 text-cyan-400">
+              <div className="w-8 h-8 rounded-xl bg-white/[0.04] border border-white/[0.1] flex items-center justify-center shrink-0 text-cyan-400">
                 <Bot className="w-4 h-4 animate-spin" />
               </div>
               <div className="max-w-[88%]">
-                <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border border-cyan-500/50 text-slate-100 rounded-tl-none font-sans text-xs sm:text-sm whitespace-pre-wrap shadow-lg shadow-cyan-950/40">
+                <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.03] border border-cyan-500/40 text-slate-100 rounded-tl-none font-sans text-xs sm:text-sm whitespace-pre-wrap shadow-lg">
                   {currentResponse}
                   <span className="inline-block w-2 h-4 ml-1 bg-cyan-400 animate-pulse" />
                 </div>
@@ -1185,7 +1185,7 @@ export function PlaygroundTab({
 
           {isLoading && !currentResponse && (
             <div className="flex items-center space-x-2 text-xs font-mono text-cyan-400 p-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
               <span>Zexin9 sedang mengarahkan permintaan melalui provider fallback tier...</span>
             </div>
           )}
@@ -1212,7 +1212,7 @@ export function PlaygroundTab({
 
           {/* Attached Files Chips Bar */}
           {attachedFiles.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 p-2 sm:p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 shadow-inner">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 p-2 sm:p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.08] shadow-inner">
               <span className="text-[11px] font-mono text-cyan-400 font-bold flex items-center space-x-1 pl-1">
                 <Paperclip className="w-3.5 h-3.5" />
                 <span>Terlampir ({attachedFiles.length}):</span>
@@ -1220,7 +1220,7 @@ export function PlaygroundTab({
               {attachedFiles.map((file) => (
                 <div
                   key={file.id}
-                  className="flex items-center space-x-1.5 px-2 py-1 rounded-lg bg-[#060913] border border-cyan-500/40 text-[11px] font-mono text-slate-200 shadow-sm"
+                  className="flex items-center space-x-1.5 px-2 py-1 rounded-lg bg-black/60 border border-cyan-500/30 text-[11px] font-mono text-slate-200 shadow-sm"
                 >
                   {file.isImage ? (
                     <ImageIcon className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
@@ -1249,7 +1249,7 @@ export function PlaygroundTab({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="absolute left-2.5 sm:left-3.5 p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition active:scale-95"
+              className="absolute left-2.5 sm:left-3.5 p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-white/[0.06] transition active:scale-95"
               title="Upload File / Kode / Dokumen / Gambar"
             >
               <Paperclip className="w-4 h-4" />
@@ -1266,7 +1266,7 @@ export function PlaygroundTab({
                 }
               }}
               placeholder="Ketik instruksi, paste kode, atau drop file di sini... (Enter = kirim)"
-              className="w-full bg-[#0b101d] border border-slate-800 focus:border-cyan-500 rounded-2xl py-2.5 sm:py-3.5 pl-10 sm:pl-12 pr-12 sm:pr-14 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none resize-none font-sans shadow-xl transition"
+              className="w-full bg-black/50 border border-white/[0.08] focus:border-cyan-500/60 rounded-2xl py-2.5 sm:py-3.5 pl-10 sm:pl-12 pr-12 sm:pr-14 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/30 resize-none font-sans shadow-xl transition"
             />
 
             {/* Send Button */}

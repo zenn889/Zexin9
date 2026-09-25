@@ -4,13 +4,10 @@ import React, { useState } from 'react';
 import {
   AlertCircle,
   ArrowRight,
-  CheckCircle2,
   Eye,
   EyeOff,
-  Key,
   Lock,
   Shield,
-  Sparkles,
 } from 'lucide-react';
 
 interface LoginModalProps {
@@ -72,18 +69,18 @@ export function LoginModal({ onLoginSuccess, hasMasterKey = true }: LoginModalPr
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#060913]/95 backdrop-blur-2xl p-4 overflow-y-auto">
-      <div className="w-full max-w-md bg-gradient-to-b from-[#0f172a]/90 to-[#070b14]/95 border border-slate-800/90 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 text-slate-100 relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-2xl p-4 overflow-y-auto">
+      <div className="w-full max-w-md pro-card p-6 sm:p-8 shadow-2xl space-y-6 text-slate-100 relative">
         {/* Brand & Badge */}
         <div className="text-center space-y-3">
           <div className="relative inline-block">
             <div className="absolute -inset-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-2xl blur-md opacity-60" />
-            <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-white text-2xl mx-auto shadow-xl border border-cyan-300/40">
+            <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-white text-2xl mx-auto shadow-xl border border-white/20">
               Z9
             </div>
           </div>
           <div>
-            <h2 className="text-xl font-black text-white tracking-tight flex items-center justify-center space-x-2">
+            <h2 className="text-xl font-bold text-white tracking-tight flex items-center justify-center space-x-2">
               <Lock className="w-5 h-5 text-cyan-400" />
               <span>Zexin9 Security Gate</span>
             </h2>
@@ -125,7 +122,7 @@ export function LoginModal({ onLoginSuccess, hasMasterKey = true }: LoginModalPr
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoFocus
-                className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-xl px-4 py-2.5 text-xs font-mono text-cyan-200 placeholder-slate-600 focus:outline-none transition shadow-inner"
+                className="w-full input-pro py-2.5"
               />
             </div>
           </div>
@@ -140,14 +137,14 @@ export function LoginModal({ onLoginSuccess, hasMasterKey = true }: LoginModalPr
                 placeholder="Ulangi Access Key baru..."
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-xl px-4 py-2.5 text-xs font-mono text-cyan-200 placeholder-slate-600 focus:outline-none transition shadow-inner"
+                className="w-full input-pro py-2.5"
               />
             </div>
           )}
 
           {error && (
-            <div className="flex items-center space-x-2 text-rose-400 text-xs font-mono bg-rose-950/50 border border-rose-900/80 p-2.5 rounded-lg animate-shake">
-              <AlertCircle className="w-4 h-4 shrink-0" />
+            <div className="flex items-center space-x-2 text-rose-300 text-xs font-mono bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
               <span>{error}</span>
             </div>
           )}
@@ -155,7 +152,7 @@ export function LoginModal({ onLoginSuccess, hasMasterKey = true }: LoginModalPr
           <button
             type="submit"
             disabled={isLoading || !password.trim()}
-            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-40 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition flex items-center justify-center space-x-2 active:scale-98"
+            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-40 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition flex items-center justify-center space-x-2 active:scale-95"
           >
             <span>
               {isLoading
@@ -168,9 +165,9 @@ export function LoginModal({ onLoginSuccess, hasMasterKey = true }: LoginModalPr
           </button>
         </form>
 
-        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-500">
-          <span className="flex items-center space-x-1">
-            <Shield className="w-3 h-3 text-cyan-400" />
+        <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-slate-500">
+          <span className="flex items-center space-x-1.5">
+            <Shield className="w-3.5 h-3.5 text-cyan-400" />
             <span>AES-256 Auth Shield</span>
           </span>
           <span className="text-cyan-400 font-semibold">Zexin9 v2.0</span>

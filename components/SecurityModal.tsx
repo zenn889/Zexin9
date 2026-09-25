@@ -108,16 +108,16 @@ export function SecurityModal({ isOpen, onClose, onLogout }: SecurityModalProps)
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#060913]/90 backdrop-blur-xl p-4 overflow-y-auto">
-      <div className="w-full max-w-lg bg-gradient-to-b from-[#0f172a]/95 to-[#070b14]/95 border border-slate-800/90 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-6 text-slate-100 relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-2xl p-4 overflow-y-auto">
+      <div className="w-full max-w-lg pro-card p-6 sm:p-7 shadow-2xl space-y-6 text-slate-100 relative">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+        <div className="flex items-center justify-between pb-3.5 border-b border-white/[0.06]">
           <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-cyan-950 border border-cyan-800 flex items-center justify-center shadow-inner">
+            <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shadow-inner">
               <Shield className="w-4 h-4 text-cyan-400" />
             </div>
             <div>
-              <h2 className="text-base font-extrabold text-white tracking-tight flex items-center space-x-2">
+              <h2 className="text-base font-bold text-white tracking-tight flex items-center space-x-2">
                 <span>Zexin9 Security Gate & Master Key</span>
               </h2>
               <p className="text-xs text-slate-400 font-mono">
@@ -127,7 +127,7 @@ export function SecurityModal({ isOpen, onClose, onLogout }: SecurityModalProps)
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] transition"
             title="Tutup"
           >
             <X className="w-4 h-4" />
@@ -135,14 +135,14 @@ export function SecurityModal({ isOpen, onClose, onLogout }: SecurityModalProps)
         </div>
 
         {/* Status Badge Card */}
-        <div className="p-3.5 rounded-xl bg-[#0d1117] border border-[#30363d] flex items-center justify-between">
+        <div className="p-3.5 rounded-xl bg-black/40 border border-white/[0.06] flex items-center justify-between">
           <div className="space-y-0.5">
             <span className="text-xs font-semibold text-slate-300 block">Status Security Gate:</span>
             <span className="text-[11px] text-slate-400">
               Setiap pengunjung wajib memasukkan key sebelum membuka dashboard.
             </span>
           </div>
-          <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 text-xs font-mono font-bold shrink-0">
+          <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-xs font-mono font-medium shrink-0">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
             <span>TERKUNCI & AMAN</span>
           </span>
@@ -175,12 +175,12 @@ export function SecurityModal({ isOpen, onClose, onLogout }: SecurityModalProps)
               type={showKey ? 'text' : 'password'}
               readOnly
               value={currentKey || 'Belum di-set (Open Access)'}
-              className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-xl px-3.5 py-2 text-xs font-mono text-cyan-300 select-all focus:outline-none"
+              className="flex-1 input-pro text-cyan-300 select-all"
             />
             <button
               onClick={handleCopy}
               disabled={!currentKey}
-              className="px-3 py-2 rounded-xl bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-xs font-mono text-slate-300 transition flex items-center space-x-1"
+              className="px-3.5 py-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-mono text-slate-300 transition flex items-center space-x-1"
               title="Salin Kunci Akses"
             >
               {copiedKey ? (
@@ -199,7 +199,7 @@ export function SecurityModal({ isOpen, onClose, onLogout }: SecurityModalProps)
         </div>
 
         {/* Form Change Key */}
-        <form onSubmit={handleChangeKey} className="space-y-3 pt-2 border-t border-[#30363d]/60">
+        <form onSubmit={handleChangeKey} className="space-y-3 pt-2 border-t border-white/[0.06]">
           <div className="flex items-center space-x-1 text-xs font-mono font-bold text-slate-300">
             <Key className="w-3.5 h-3.5 text-cyan-400" />
             <span>UBAH KUNCI AKSES (GANTI PASSWORD):</span>
@@ -211,27 +211,27 @@ export function SecurityModal({ isOpen, onClose, onLogout }: SecurityModalProps)
               placeholder="Masukkan Kunci Akses Baru..."
               value={newKey}
               onChange={(e) => setNewKey(e.target.value)}
-              className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+              className="w-full input-pro"
             />
             <input
               type="text"
               placeholder="Konfirmasi Kunci Akses Baru..."
               value={confirmKey}
               onChange={(e) => setConfirmKey(e.target.value)}
-              className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+              className="w-full input-pro"
             />
           </div>
 
           {error && (
-            <div className="flex items-center space-x-2 text-rose-400 text-xs font-mono bg-rose-950/40 border border-rose-900/60 p-2.5 rounded-lg">
-              <AlertCircle className="w-4 h-4 shrink-0" />
+            <div className="flex items-center space-x-2 text-rose-300 text-xs font-mono bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
               <span>{error}</span>
             </div>
           )}
 
           {success && (
-            <div className="flex items-center space-x-2 text-emerald-400 text-xs font-mono bg-emerald-950/40 border border-emerald-900/60 p-2.5 rounded-lg">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <div className="flex items-center space-x-2 text-emerald-300 text-xs font-mono bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
               <span>{success}</span>
             </div>
           )}
@@ -239,14 +239,14 @@ export function SecurityModal({ isOpen, onClose, onLogout }: SecurityModalProps)
           <button
             type="submit"
             disabled={isLoading || !newKey.trim()}
-            className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-slate-950 font-bold text-xs transition shadow-md flex items-center justify-center space-x-1.5"
+            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-40 text-slate-950 font-bold text-xs transition shadow-md flex items-center justify-center space-x-1.5 active:scale-95"
           >
             <span>{isLoading ? 'Menyimpan...' : 'Simpan & Terapkan Kunci Baru'}</span>
           </button>
         </form>
 
         {/* Lock Web Now Button */}
-        <div className="pt-3 border-t border-[#30363d] flex items-center justify-between">
+        <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between">
           <div className="text-xs text-slate-400">
             Ingin menguji layar kunci atau keluar sekarang?
           </div>
@@ -255,7 +255,7 @@ export function SecurityModal({ isOpen, onClose, onLogout }: SecurityModalProps)
               onClose();
               onLogout();
             }}
-            className="px-3 py-1.5 rounded-lg bg-rose-950 hover:bg-rose-900 border border-rose-800 text-rose-200 text-xs font-mono font-semibold flex items-center space-x-1.5 transition"
+            className="px-3.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-mono font-medium flex items-center space-x-1.5 transition active:scale-95"
           >
             <Lock className="w-3.5 h-3.5" />
             <span>Kunci Web Sekarang</span>

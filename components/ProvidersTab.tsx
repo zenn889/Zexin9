@@ -253,23 +253,24 @@ export function ProvidersTab({
 
   const handleAddCfAccount = () => {
     if (!newAccountId.trim() || !newAccountToken.trim()) return;
+
     const newAcc: CloudflareAccount = {
-      id: `cf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      name: newAccountName.trim() || `Cloudflare #${cfAccounts.length + 1}`,
+      id: `cf-${Date.now()}`,
+      name: newAccountName.trim() || `Akun CF #${cfAccounts.length + 1}`,
       accountId: newAccountId.trim(),
       apiToken: newAccountToken.trim(),
       enabled: true,
-      createdAt: new Date().toISOString(),
+      lastTested: new Date().toISOString(),
     };
+
     const updated = [...cfAccounts, newAcc];
     saveCfAccountsLocalAndSync(updated);
 
-    // If single inputs were empty, sync with this first account
-    if (!cfAccountId) {
-      handleCfAccountIdChange(newAcc.accountId);
-    }
     if (!keys['cloudflare']) {
       handleKeyChange('cloudflare', newAcc.apiToken);
+    }
+    if (!cfAccountId) {
+      handleCfAccountIdChange(newAcc.accountId);
     }
 
     setNewAccountName('');
@@ -280,7 +281,7 @@ export function ProvidersTab({
 
   const handleToggleCfAccount = (id: string) => {
     const updated = cfAccounts.map((acc) =>
-      acc.id === id ? { ...acc, enabled: acc.enabled === false ? true : false } : acc
+      acc.id === id ? { ...acc, enabled: !acc.enabled } : acc
     );
     saveCfAccountsLocalAndSync(updated);
   };
@@ -304,7 +305,6 @@ export function ProvidersTab({
           provider: 'cloudflare',
           apiKey: acc.apiToken,
           accountId: acc.accountId,
-          model: '@cf/meta/llama-3.1-8b-instruct',
         }),
       });
       const data = await res.json();
@@ -329,12 +329,13 @@ export function ProvidersTab({
     }
   };
 
-  // Universal 9Router Provider Account Handlers
+  // --- 9Router Universal Connections Pool Handlers ---
   const saveProviderAccountsLocalAndSync = (updated: ProviderAccount[]) => {
     setProviderAccounts(updated);
     if (typeof window !== 'undefined') {
       localStorage.setItem('zexin9_provider_accounts', JSON.stringify(updated));
     }
+    // Auto sync with server database
     fetch('/api/providers/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -350,19 +351,20 @@ export function ProvidersTab({
 
   const handleAddAccount = () => {
     if (!newAccKey.trim()) return;
-    const providerObj = DEFAULT_PROVIDERS.find((p) => p.id === newAccProvider);
-    const existingCount = providerAccounts.filter((a) => a.provider === newAccProvider).length;
+
     const newAcc: ProviderAccount = {
-      id: `acc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `acc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       provider: newAccProvider,
       name:
         newAccName.trim() ||
-        `${providerObj?.name || newAccProvider} #${existingCount + 1}`,
+        `${DEFAULT_PROVIDERS.find((p) => p.id === newAccProvider)?.name || newAccProvider} #${
+          providerAccounts.filter((a) => a.provider === newAccProvider).length + 1
+        }`,
       apiKey: newAccKey.trim(),
-      accountId: newAccProvider === 'cloudflare' ? newAccAccountId.trim() : undefined,
+      accountId: newAccAccountId.trim() || undefined,
       baseUrl: newAccBaseUrl.trim() || undefined,
       enabled: true,
-      createdAt: new Date().toISOString(),
+      lastTested: new Date().toISOString(),
     };
 
     const updated = [...providerAccounts, newAcc];
@@ -519,7 +521,7 @@ export function ProvidersTab({
         [providerId]: existing.filter((m) => m !== modelName),
       };
       if (typeof window !== 'undefined') {
-        localStorage.setItem('9router_user_models', JSON.stringify(updated));
+        localStorage.setItem('zexin9_user_models', JSON.stringify(updated));
       }
       return updated;
     });
@@ -642,32 +644,36 @@ export function ProvidersTab({
       level: 1,
       title: 'Tier 1: Subscription Tier (Primary Frontier)',
       desc: 'High-reasoning models used first (Claude 3.7/3.5, GPT-4o). When rate limited (429), cascades to Tier 2.',
-      badgeClass: 'text-orange-400 bg-orange-950/80 border-orange-800',
+      badgeClass: 'text-amber-300 bg-amber-500/10 border-amber-500/20',
     },
     {
       level: 2,
       title: 'Tier 2: Cheap Tier (Pay-As-You-Go Backup)',
       desc: 'Cost-effective frontier alternatives (DeepSeek, SiliconFlow, Mistral, Together, Perplexity).',
-      badgeClass: 'text-cyan-400 bg-cyan-950/80 border-cyan-800',
+      badgeClass: 'text-cyan-300 bg-cyan-500/10 border-cyan-500/20',
     },
     {
       level: 3,
       title: 'Tier 3: Free & Edge High-Throughput Tier (Safety Net)',
       desc: 'Free rate limits & edge speeds (Cloudflare Workers AI, Google Gemini, Groq, Cerebras). Zero coding downtime!',
-      badgeClass: 'text-emerald-400 bg-emerald-950/80 border-emerald-800',
+      badgeClass: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20',
     },
   ];
 
+  const configuredProvidersCount = DEFAULT_PROVIDERS.filter(
+    (p) => Boolean(keys[p.id]?.trim()) || Boolean(envConfigured[p.id])
+  ).length;
+
   return (
-    <div className="space-y-8 text-slate-200">
+    <div className="space-y-6 sm:space-y-8 text-slate-200">
       {/* Top Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#30363d]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
         <div>
           <h2 className="text-base font-bold text-white flex items-center space-x-2">
             <Key className="w-4 h-4 text-cyan-400" />
             <span>3-Tier Provider Pool & Model Selector (13+ Providers)</span>
           </h2>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-400 mt-0.5">
             Pilih model spesifik untuk masing-masing provider (misal: DeepSeek Chat vs Reasoner, GPT-4o vs o3-mini).
           </p>
         </div>
@@ -675,7 +681,7 @@ export function ProvidersTab({
         <div className="flex items-center space-x-2">
           <button
             onClick={copyEnvToClipboard}
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-xs font-mono font-semibold text-slate-200 border border-[#30363d] transition"
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] text-xs font-mono font-medium text-slate-200 border border-white/[0.08] transition active:scale-95"
           >
             {copiedEnv ? (
               <>
@@ -691,7 +697,7 @@ export function ProvidersTab({
           </button>
           <button
             onClick={onRefreshStatus}
-            className="p-1.5 rounded-lg bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-slate-300 transition"
+            className="p-1.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.08] text-slate-300 transition active:scale-95"
             title="Refresh Status"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -700,25 +706,25 @@ export function ProvidersTab({
       </div>
 
       {/* Multi-Provider Pool Status & Cloud Save Banner */}
-      <div className="p-4 rounded-xl bg-[#161b22] border border-[#30363d] space-y-3">
+      <div className="pro-card p-4 sm:p-5 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center space-x-2.5">
+          <div className="flex items-center space-x-3">
             <div
               className={`w-3 h-3 rounded-full shrink-0 ${
-                DEFAULT_PROVIDERS.filter((p) => Boolean(keys[p.id]?.trim()) || Boolean(envConfigured[p.id])).length > 0
-                  ? 'bg-emerald-400 animate-pulse'
-                  : 'bg-slate-500'
+                configuredProvidersCount > 0
+                  ? 'bg-emerald-400 ring-4 ring-emerald-400/20 animate-pulse'
+                  : 'bg-slate-600'
               }`}
             />
             <div>
               <div className="text-xs font-bold text-white flex items-center space-x-2">
                 <span>Multi-Provider Active Pool:</span>
                 <span className="text-cyan-300 font-mono">
-                  {DEFAULT_PROVIDERS.filter((p) => Boolean(keys[p.id]?.trim()) || Boolean(envConfigured[p.id])).length} Provider Aktif Sekaligus
+                  {configuredProvidersCount} Provider Aktif Sekaligus
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                {DEFAULT_PROVIDERS.filter((p) => Boolean(keys[p.id]?.trim()) || Boolean(envConfigured[p.id])).length > 0
+                {configuredProvidersCount > 0
                   ? `Siap auto-failover & balancing: ${DEFAULT_PROVIDERS.filter(
                       (p) => Boolean(keys[p.id]?.trim()) || Boolean(envConfigured[p.id])
                     )
@@ -732,7 +738,7 @@ export function ProvidersTab({
           <button
             onClick={handleSaveAllToCloud}
             disabled={savingAllKeys}
-            className="shrink-0 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/25 transition disabled:opacity-50 flex items-center space-x-1.5"
+            className="shrink-0 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 text-xs font-bold shadow-md shadow-emerald-500/20 transition disabled:opacity-50 flex items-center space-x-1.5 active:scale-95"
           >
             <Check className="w-3.5 h-3.5" />
             <span>{savingAllKeys ? 'Menyimpan ke Cloud...' : 'Simpan Semua Keys ke Cloud DB'}</span>
@@ -740,7 +746,7 @@ export function ProvidersTab({
         </div>
 
         {saveAllMsg && (
-          <div className="p-2.5 rounded-lg bg-emerald-950/70 border border-emerald-700 text-emerald-200 text-xs flex items-center space-x-2">
+          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-200 text-xs flex items-center space-x-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{saveAllMsg}</span>
           </div>
@@ -748,33 +754,33 @@ export function ProvidersTab({
       </div>
 
       {/* Gateway Master Key Card */}
-      <div className="p-4 rounded-xl bg-[#161b22] border border-[#30363d] space-y-2">
+      <div className="pro-card p-4 sm:p-5 space-y-2.5">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-mono font-bold text-white flex items-center space-x-1.5">
-            <Shield className="w-4 h-4 text-indigo-400" />
-            <span>PROXY BEARER TOKEN (OPTIONAL PASSWORD)</span>
+          <span className="text-xs font-mono font-bold text-white flex items-center space-x-2">
+            <Shield className="w-4 h-4 text-cyan-400" />
+            <span>PROXY BEARER TOKEN (OPTIONAL PASSWORD GATEWAY)</span>
           </span>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">
-            Security
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-medium">
+            Security Gate
           </span>
         </div>
         <p className="text-xs text-slate-400">
-          Protects your proxy from unauthorized callers. When set, clients must pass this token in <code className="text-indigo-300">Authorization: Bearer</code>.
+          Protects your proxy from unauthorized callers. When set, clients must pass this token in <code className="text-cyan-300">Authorization: Bearer</code>.
         </p>
         <input
           type="text"
           placeholder="e.g. sk-zx9-master-token"
           value={gatewaySecret}
           onChange={(e) => handleGatewaySecretChange(e.target.value)}
-          className="w-full max-w-lg bg-[#0d1117] border border-[#30363d] focus:border-indigo-500 rounded-lg px-3 py-1.5 text-xs font-mono text-indigo-200 placeholder-slate-600 focus:outline-none"
+          className="input-pro w-full max-w-lg"
         />
       </div>
 
       {/* 9Router Universal Connections & Multi-Account Manager */}
-      <div className="p-5 rounded-2xl bg-[#090d13] border border-cyan-500/30 shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#30363d]/80">
+      <div className="pro-card p-5 sm:p-6 space-y-4 relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20 shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20 shrink-0 border border-white/20">
               <Layers className="w-5 h-5" />
             </div>
             <div>
@@ -782,10 +788,10 @@ export function ProvidersTab({
                 <h3 className="text-sm font-bold text-white">
                   9Router Multi-Account Connections Pool
                 </h3>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-700">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-medium">
                   {providerAccounts.filter((a) => a.enabled).length} Akun Aktif
                 </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/[0.04] text-slate-300 border border-white/[0.06] font-medium">
                   {new Set(providerAccounts.map((a) => a.provider)).size} Provider Terhubung
                 </span>
               </div>
@@ -799,7 +805,7 @@ export function ProvidersTab({
             <button
               type="button"
               onClick={() => setIsAddingAccount(!isAddingAccount)}
-              className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-cyan-500/20 flex items-center space-x-1.5 transition"
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-cyan-500/20 flex items-center space-x-1.5 transition active:scale-95"
             >
               <Plus className="w-4 h-4" />
               <span>+ Hubungkan Akun Baru</span>
@@ -812,10 +818,10 @@ export function ProvidersTab({
           <button
             type="button"
             onClick={() => setSelectedFilterProvider('all')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition ${
+            className={`px-3 py-1 rounded-lg text-xs font-mono font-medium transition active:scale-95 ${
               selectedFilterProvider === 'all'
-                ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
-                : 'bg-[#161b22] text-slate-400 hover:text-slate-200 border border-[#30363d]'
+                ? 'bg-white/[0.1] text-white font-semibold border border-white/[0.12] shadow-sm'
+                : 'bg-white/[0.03] text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] border border-white/[0.06]'
             }`}
           >
             Semua Akun ({providerAccounts.length})
@@ -829,23 +835,23 @@ export function ProvidersTab({
                 key={p.id}
                 type="button"
                 onClick={() => setSelectedFilterProvider(p.id)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono transition flex items-center space-x-1 ${
+                className={`px-3 py-1 rounded-lg text-xs font-mono transition flex items-center space-x-1.5 active:scale-95 ${
                   isSelected
-                    ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
-                    : 'bg-[#161b22] text-slate-400 hover:text-slate-200 border border-[#30363d]'
+                    ? 'bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30 shadow-sm'
+                    : 'bg-white/[0.03] text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] border border-white/[0.06]'
                 }`}
               >
                 <span>{p.name.split(' ')[0]}</span>
-                <span className="text-[10px] opacity-75">({count})</span>
+                <span className="text-[10px] opacity-75 font-bold">({count})</span>
               </button>
             );
           })}
         </div>
 
-        {/* Add Connection Inline Modal / Form */}
+        {/* Add Connection Inline Form */}
         {isAddingAccount && (
-          <div className="p-4 rounded-xl bg-[#161b22] border border-cyan-500/40 space-y-3.5 animate-in fade-in">
-            <div className="flex items-center justify-between pb-2 border-b border-[#30363d]">
+          <div className="p-4 sm:p-5 rounded-xl bg-black/50 border border-cyan-500/30 space-y-3.5 animate-in fade-in">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
               <div className="flex items-center space-x-2">
                 <Plus className="w-4 h-4 text-cyan-400" />
                 <span className="text-xs font-bold text-white">Hubungkan Akun / Connection Baru</span>
@@ -853,7 +859,7 @@ export function ProvidersTab({
               <button
                 type="button"
                 onClick={() => setIsAddingAccount(false)}
-                className="text-slate-400 hover:text-white text-xs px-2 py-0.5 rounded hover:bg-[#21262d]"
+                className="text-slate-400 hover:text-white text-xs px-2 py-0.5 rounded hover:bg-white/[0.06]"
               >
                 ✕ Tutup
               </button>
@@ -868,10 +874,10 @@ export function ProvidersTab({
                 <select
                   value={newAccProvider}
                   onChange={(e) => setNewAccProvider(e.target.value as ProviderId)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none"
+                  className="input-pro w-full"
                 >
                   {DEFAULT_PROVIDERS.map((p) => (
-                    <option key={p.id} value={p.id}>
+                    <option key={p.id} value={p.id} className="bg-slate-900 text-white">
                       {p.name}
                     </option>
                   ))}
@@ -888,7 +894,7 @@ export function ProvidersTab({
                   placeholder="e.g. Akun Utama 1"
                   value={newAccName}
                   onChange={(e) => setNewAccName(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                  className="input-pro w-full"
                 />
               </div>
 
@@ -901,7 +907,7 @@ export function ProvidersTab({
                   <button
                     type="button"
                     onClick={() => setShowNewAccKey(!showNewAccKey)}
-                    className="text-[10px] text-slate-500 hover:text-slate-300"
+                    className="text-[10px] text-slate-400 hover:text-slate-200"
                   >
                     {showNewAccKey ? 'Hide' : 'Show'}
                   </button>
@@ -911,7 +917,7 @@ export function ProvidersTab({
                   placeholder="Masukkan API key untuk akun ini"
                   value={newAccKey}
                   onChange={(e) => setNewAccKey(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                  className="input-pro w-full"
                 />
               </div>
 
@@ -926,7 +932,7 @@ export function ProvidersTab({
                     placeholder="e.g. 8f6b89f3a54b38d9751e1882ff207b1c"
                     value={newAccAccountId}
                     onChange={(e) => setNewAccAccountId(e.target.value)}
-                    className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                    className="input-pro w-full"
                   />
                 </div>
               )}
@@ -942,17 +948,17 @@ export function ProvidersTab({
                     placeholder="e.g. http://localhost:11434/v1"
                     value={newAccBaseUrl}
                     onChange={(e) => setNewAccBaseUrl(e.target.value)}
-                    className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                    className="input-pro w-full"
                   />
                 </div>
               )}
             </div>
 
-            <div className="flex justify-end space-x-2 pt-2 border-t border-[#30363d]">
+            <div className="flex justify-end space-x-2 pt-2 border-t border-white/[0.06]">
               <button
                 type="button"
                 onClick={() => setIsAddingAccount(false)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-[#21262d] transition"
+                className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.06] transition"
               >
                 Batal
               </button>
@@ -960,7 +966,7 @@ export function ProvidersTab({
                 type="button"
                 disabled={!newAccKey.trim()}
                 onClick={handleAddAccount}
-                className="px-4 py-1.5 rounded-lg text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20 transition disabled:opacity-40"
+                className="px-4 py-1.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20 transition disabled:opacity-40"
               >
                 + Hubungkan Akun
               </button>
@@ -973,7 +979,7 @@ export function ProvidersTab({
           {providerAccounts.filter(
             (a) => selectedFilterProvider === 'all' || a.provider === selectedFilterProvider
           ).length === 0 ? (
-            <div className="text-center py-6 px-4 rounded-xl border border-dashed border-[#30363d] bg-[#0d1117]">
+            <div className="text-center py-8 px-4 rounded-xl border border-dashed border-white/[0.08] bg-black/20">
               <Users className="w-8 h-8 text-slate-600 mx-auto mb-2" />
               <p className="text-xs text-slate-400 font-medium">
                 Belum ada akun terhubung untuk {selectedFilterProvider === 'all' ? 'kategori ini' : selectedFilterProvider}.
@@ -999,10 +1005,10 @@ export function ProvidersTab({
                   return (
                     <div
                       key={acc.id}
-                      className={`p-3 rounded-xl border transition flex flex-col justify-between ${
+                      className={`p-3.5 rounded-xl border transition flex flex-col justify-between ${
                         isEnabled
-                          ? 'bg-[#161b22] border-[#30363d] hover:border-cyan-500/50'
-                          : 'bg-[#0d1117] border-[#21262d] opacity-60'
+                          ? 'bg-black/40 border-white/[0.08] hover:border-cyan-500/40'
+                          : 'bg-black/20 border-white/[0.04] opacity-60'
                       }`}
                     >
                       <div>
@@ -1010,7 +1016,7 @@ export function ProvidersTab({
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center space-x-2">
                             <div
-                              className={`w-6 h-6 rounded-md bg-gradient-to-tr ${meta.color} flex items-center justify-center font-bold text-[10px] text-white uppercase shrink-0`}
+                              className={`w-6 h-6 rounded-lg bg-gradient-to-tr ${meta.color} flex items-center justify-center font-bold text-[10px] text-white uppercase shrink-0`}
                             >
                               {acc.provider.slice(0, 2)}
                             </div>
@@ -1019,7 +1025,7 @@ export function ProvidersTab({
                             </span>
                           </div>
 
-                          <div className="flex items-center space-x-1">
+                          <div className="flex items-center space-x-1.5">
                             <span
                               className={`w-2 h-2 rounded-full ${
                                 isEnabled
@@ -1033,10 +1039,10 @@ export function ProvidersTab({
                             <button
                               type="button"
                               onClick={() => handleToggleAccount(acc.id)}
-                              className={`text-[10px] font-mono px-1.5 py-0.5 rounded border transition ${
+                              className={`text-[10px] font-mono px-2 py-0.5 rounded-md border transition ${
                                 isEnabled
-                                  ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60'
-                                  : 'bg-slate-800 text-slate-400 border-slate-700'
+                                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20 font-medium'
+                                  : 'bg-white/[0.04] text-slate-400 border-white/[0.06]'
                               }`}
                             >
                               {isEnabled ? 'ON' : 'OFF'}
@@ -1044,7 +1050,7 @@ export function ProvidersTab({
                             <button
                               type="button"
                               onClick={() => handleDeleteAccount(acc.id)}
-                              className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 rounded transition"
+                              className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition"
                               title="Hapus akun"
                             >
                               <Trash2 className="w-3 h-3" />
@@ -1056,7 +1062,7 @@ export function ProvidersTab({
                         <div className="space-y-1 text-[11px] font-mono text-slate-400 mb-2.5">
                           <div className="flex items-center justify-between">
                             <span className="text-slate-500">Provider:</span>
-                            <span className="text-cyan-300 uppercase text-[10px]">{acc.provider}</span>
+                            <span className="text-cyan-300 uppercase text-[10px] font-semibold">{acc.provider}</span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-slate-500">API Key:</span>
@@ -1076,13 +1082,13 @@ export function ProvidersTab({
                       </div>
 
                       {/* Ping Footer & Test */}
-                      <div className="pt-2 border-t border-[#30363d]/60">
+                      <div className="pt-2 border-t border-white/[0.06]">
                         {ping && (
                           <div
-                            className={`mb-2 text-[10px] font-mono p-1 rounded border flex items-center justify-between ${
+                            className={`mb-2 text-[10px] font-mono p-1 rounded-lg border flex items-center justify-between ${
                               ping.success
-                                ? 'bg-emerald-950/30 border-emerald-800/50 text-emerald-300'
-                                : 'bg-rose-950/30 border-rose-800/50 text-rose-300'
+                                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                                : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
                             }`}
                           >
                             <span className="truncate max-w-[190px]">
@@ -1107,7 +1113,7 @@ export function ProvidersTab({
                             type="button"
                             disabled={ping?.loading}
                             onClick={() => handleTestAccount(acc)}
-                            className="px-2 py-0.5 text-[10px] font-mono rounded bg-[#21262d] hover:bg-[#30363d] text-cyan-300 border border-[#30363d] flex items-center space-x-1 transition disabled:opacity-50"
+                            className="px-2.5 py-1 text-[10px] font-mono rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-cyan-300 border border-white/[0.08] flex items-center space-x-1 transition disabled:opacity-50"
                           >
                             {ping?.loading ? (
                               <RefreshCw className="w-2.5 h-2.5 animate-spin" />
@@ -1133,16 +1139,16 @@ export function ProvidersTab({
         );
 
         return (
-          <div key={tierInfo.level} className="space-y-3">
+          <div key={tierInfo.level} className="space-y-3.5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center space-x-2">
                   <span>{tierInfo.title}</span>
-                  <span className={`text-[10px] font-mono px-2 py-0.2 rounded border ${tierInfo.badgeClass}`}>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${tierInfo.badgeClass}`}>
                     Tier {tierInfo.level}
                   </span>
                 </h3>
-                <p className="text-xs text-slate-400">{tierInfo.desc}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{tierInfo.desc}</p>
               </div>
             </div>
 
@@ -1163,17 +1169,15 @@ export function ProvidersTab({
                 return (
                   <div
                     key={provider.id}
-                    className={`p-4 rounded-xl border transition ${
-                      hasKey
-                        ? 'bg-[#161b22] border-[#30363d]'
-                        : 'bg-[#0d1117] border-[#21262d] opacity-80'
+                    className={`pro-card p-4 sm:p-5 transition ${
+                      hasKey ? '' : 'opacity-85'
                     }`}
                   >
                     {/* Header */}
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center space-x-2.5">
                         <div
-                          className={`w-7 h-7 rounded-lg bg-gradient-to-tr ${meta.color} flex items-center justify-center font-bold text-xs text-white uppercase`}
+                          className={`w-8 h-8 rounded-xl bg-gradient-to-tr ${meta.color} flex items-center justify-center font-bold text-xs text-white uppercase shadow-md`}
                         >
                           {provider.id.slice(0, 2)}
                         </div>
@@ -1187,7 +1191,7 @@ export function ProvidersTab({
 
                       <div className="flex items-center space-x-1.5">
                         {providerAccounts.filter((a) => a.provider === provider.id && a.enabled).length > 0 && (
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-800">
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-medium">
                             {providerAccounts.filter((a) => a.provider === provider.id && a.enabled).length} Akun
                           </span>
                         )}
@@ -1200,19 +1204,19 @@ export function ProvidersTab({
                               window.scrollTo({ top: 380, behavior: 'smooth' });
                             }
                           }}
-                          className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21262d] hover:bg-cyan-950 hover:text-cyan-300 text-slate-400 border border-[#30363d] transition flex items-center space-x-0.5"
+                          className="text-[10px] font-mono px-2 py-0.5 rounded-lg bg-white/[0.04] hover:bg-cyan-500/20 hover:text-cyan-300 text-slate-400 border border-white/[0.08] transition flex items-center space-x-1"
                           title="Hubungkan akun baru ke provider ini"
                         >
                           <Plus className="w-2.5 h-2.5" />
                           <span>Akun</span>
                         </button>
                         {isConfiguredEnv && (
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21262d] text-cyan-300 border border-[#30363d]">
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/[0.04] text-cyan-300 border border-white/[0.08]">
                             ENV
                           </span>
                         )}
                         {hasKey ? (
-                          <span className="text-xs text-emerald-400 font-semibold flex items-center space-x-1">
+                          <span className="text-xs text-emerald-400 font-medium flex items-center space-x-1">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>Ready</span>
                           </span>
@@ -1223,7 +1227,7 @@ export function ProvidersTab({
                     </div>
 
                     {/* Inputs */}
-                    <div className="space-y-2.5">
+                    <div className="space-y-3">
                       {/* API Key */}
                       <div>
                         <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 mb-1">
@@ -1257,7 +1261,7 @@ export function ProvidersTab({
                           }
                           value={currentKey}
                           onChange={(e) => handleKeyChange(provider.id, e.target.value)}
-                          className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                          className="input-pro w-full"
                         />
                         {provider.id !== 'cloudflare' && (
                           <p className="text-[10px] text-slate-500 mt-1">
@@ -1268,10 +1272,10 @@ export function ProvidersTab({
 
                       {/* Cloudflare Multi-Account Pool Manager */}
                       {provider.id === 'cloudflare' && (
-                        <div className="p-3.5 rounded-xl bg-[#090d13] border border-amber-900/40 space-y-3 mt-1">
+                        <div className="p-3.5 rounded-xl bg-black/40 border border-amber-500/20 space-y-3 mt-1">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-2">
-                              <div className="p-1 rounded-md bg-amber-500/10 text-amber-400">
+                              <div className="p-1 rounded-lg bg-amber-500/10 text-amber-400">
                                 <Layers className="w-4 h-4" />
                               </div>
                               <div>
@@ -1290,21 +1294,21 @@ export function ProvidersTab({
                             <button
                               type="button"
                               onClick={() => setIsAddingCfAccount(!isAddingCfAccount)}
-                              className="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 flex items-center space-x-1 transition"
+                              className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 flex items-center space-x-1 transition"
                             >
                               <Plus className="w-3 h-3" />
                               <span>Tambah Akun</span>
                             </button>
                           </div>
 
-                          <div className="p-2 rounded-lg bg-amber-950/20 border border-amber-800/30 text-[11px] text-amber-200/90 leading-relaxed">
+                          <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-200/90 leading-relaxed">
                             💡 <strong>Auto-Failover Kuota:</strong> Setiap akun Cloudflare dapat 10.000 neuron gratis per hari. Sambungkan beberapa akun Cloudflare kamu di sini — Zexin9 akan otomatis merotasi (round-robin) dan beralih otomatis ke akun berikutnya jika suatu akun terkena limit 429 atau kuotanya habis!
                           </div>
 
                           {/* Accounts List */}
                           <div className="space-y-2">
                             {cfAccounts.length === 0 ? (
-                              <div className="text-center py-2.5 text-xs text-slate-500 border border-dashed border-[#30363d] rounded-lg">
+                              <div className="text-center py-2.5 text-xs text-slate-500 border border-dashed border-white/[0.08] rounded-xl">
                                 Belum ada akun terdaftar di pool. Klik <strong>Tambah Akun</strong> di atas untuk menyambungkan akun Cloudflare pertamamu!
                               </div>
                             ) : (
@@ -1314,10 +1318,10 @@ export function ProvidersTab({
                                 return (
                                   <div
                                     key={acc.id}
-                                    className={`p-2.5 rounded-lg border transition ${
+                                    className={`p-2.5 rounded-xl border transition ${
                                       isEnabled
-                                        ? 'bg-[#161b22] border-[#30363d]'
-                                        : 'bg-[#0d1117] border-[#21262d] opacity-60'
+                                        ? 'bg-black/30 border-white/[0.08]'
+                                        : 'bg-black/10 border-white/[0.04] opacity-60'
                                     }`}
                                   >
                                     <div className="flex items-center justify-between mb-1.5">
@@ -1337,7 +1341,7 @@ export function ProvidersTab({
                                           type="button"
                                           disabled={ping?.loading}
                                           onClick={() => handleTestCfAccount(acc)}
-                                          className="px-2 py-0.5 text-[10px] font-mono rounded bg-[#21262d] hover:bg-[#30363d] text-cyan-300 border border-[#30363d] flex items-center space-x-1 transition disabled:opacity-50"
+                                          className="px-2 py-0.5 text-[10px] font-mono rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-cyan-300 border border-white/[0.08] flex items-center space-x-1 transition disabled:opacity-50"
                                         >
                                           {ping?.loading ? (
                                             <RefreshCw className="w-2.5 h-2.5 animate-spin" />
@@ -1351,10 +1355,10 @@ export function ProvidersTab({
                                         <button
                                           type="button"
                                           onClick={() => handleToggleCfAccount(acc.id)}
-                                          className={`px-2 py-0.5 text-[10px] font-mono rounded border transition ${
+                                          className={`px-2 py-0.5 text-[10px] font-mono rounded-lg border transition ${
                                             isEnabled
-                                              ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60'
-                                              : 'bg-slate-800 text-slate-400 border-slate-700'
+                                              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20 font-medium'
+                                              : 'bg-white/[0.04] text-slate-400 border-white/[0.06]'
                                           }`}
                                         >
                                           {isEnabled ? 'Aktif' : 'Nonaktif'}
@@ -1364,7 +1368,7 @@ export function ProvidersTab({
                                         <button
                                           type="button"
                                           onClick={() => handleDeleteCfAccount(acc.id)}
-                                          className="p-1 text-slate-500 hover:text-red-400 hover:bg-red-950/30 rounded transition"
+                                          className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition"
                                           title="Hapus akun dari pool"
                                         >
                                           <Trash2 className="w-3 h-3" />
@@ -1385,10 +1389,10 @@ export function ProvidersTab({
                                     {/* Ping Result Banner */}
                                     {ping && (
                                       <div
-                                        className={`mt-2 text-[10px] font-mono p-1.5 rounded border flex items-center justify-between ${
+                                        className={`mt-2 text-[10px] font-mono p-1.5 rounded-lg border flex items-center justify-between ${
                                           ping.success
-                                            ? 'bg-emerald-950/30 border-emerald-800/50 text-emerald-300'
-                                            : 'bg-rose-950/30 border-rose-800/50 text-rose-300'
+                                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                                            : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
                                         }`}
                                       >
                                         <span>
@@ -1406,7 +1410,7 @@ export function ProvidersTab({
 
                           {/* Add Account Inline Form */}
                           {isAddingCfAccount && (
-                            <div className="p-3 rounded-xl bg-[#161b22] border border-amber-500/30 space-y-2.5 mt-2 animate-in fade-in">
+                            <div className="p-3 rounded-xl bg-black/50 border border-amber-500/30 space-y-2.5 mt-2 animate-in fade-in">
                               <div className="text-xs font-bold text-white flex items-center justify-between">
                                 <span>+ Tambah Akun Cloudflare Baru</span>
                                 <button
@@ -1427,7 +1431,7 @@ export function ProvidersTab({
                                   placeholder="e.g. Akun CF Cadangan 1"
                                   value={newAccountName}
                                   onChange={(e) => setNewAccountName(e.target.value)}
-                                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-amber-500 rounded-lg px-2.5 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                                  className="input-pro w-full"
                                 />
                               </div>
 
@@ -1440,7 +1444,7 @@ export function ProvidersTab({
                                   placeholder="e.g. 8f6b89f3a54b38d9751e1882ff207b1c"
                                   value={newAccountId}
                                   onChange={(e) => setNewAccountId(e.target.value)}
-                                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-amber-500 rounded-lg px-2.5 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                                  className="input-pro w-full"
                                 />
                               </div>
 
@@ -1452,7 +1456,7 @@ export function ProvidersTab({
                                   <button
                                     type="button"
                                     onClick={() => setShowNewToken(!showNewToken)}
-                                    className="text-[10px] text-slate-500 hover:text-slate-300"
+                                    className="text-[10px] text-slate-400 hover:text-slate-200"
                                   >
                                     {showNewToken ? 'Hide' : 'Show'}
                                   </button>
@@ -1462,7 +1466,7 @@ export function ProvidersTab({
                                   placeholder="Workers AI Read/Edit Token"
                                   value={newAccountToken}
                                   onChange={(e) => setNewAccountToken(e.target.value)}
-                                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-amber-500 rounded-lg px-2.5 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                                  className="input-pro w-full"
                                 />
                               </div>
 
@@ -1470,7 +1474,7 @@ export function ProvidersTab({
                                 <button
                                   type="button"
                                   onClick={() => setIsAddingCfAccount(false)}
-                                  className="px-3 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-[#21262d] transition"
+                                  className="px-3 py-1 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.06] transition"
                                 >
                                   Batal
                                 </button>
@@ -1478,7 +1482,7 @@ export function ProvidersTab({
                                   type="button"
                                   disabled={!newAccountId.trim() || !newAccountToken.trim()}
                                   onClick={handleAddCfAccount}
-                                  className="px-3 py-1 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition disabled:opacity-40"
+                                  className="px-3 py-1 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition disabled:opacity-40"
                                 >
                                   + Tambahkan ke Pool
                                 </button>
@@ -1487,7 +1491,7 @@ export function ProvidersTab({
                           )}
 
                           {/* Quick / Single Account ID input for fallback */}
-                          <div className="pt-2 border-t border-[#30363d]/60">
+                          <div className="pt-2 border-t border-white/[0.06]">
                             <span className="text-[10px] font-semibold text-slate-400 block mb-1">
                               Default Cloudflare Account ID (Utama)
                             </span>
@@ -1496,27 +1500,27 @@ export function ProvidersTab({
                               placeholder="e.g. 8f6b89f3a54b38d9751e1882ff207b1c"
                               value={cfAccountId}
                               onChange={(e) => handleCfAccountIdChange(e.target.value)}
-                              className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                              className="input-pro w-full"
                             />
                           </div>
                         </div>
                       )}
 
                       {/* MODEL SELECTOR & MANAGER */}
-                      <div className="p-3 rounded-lg bg-[#0d1117] border border-[#30363d] space-y-2.5">
+                      <div className="p-3.5 rounded-xl bg-black/40 border border-white/[0.06] space-y-2.5">
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="font-semibold text-slate-300 flex items-center space-x-1.5">
                             <Cpu className="w-3.5 h-3.5 text-cyan-400" />
                             <span>Pilih Model {provider.name}:</span>
                           </span>
-                          <span className="font-mono text-[10px] text-cyan-300 bg-[#161b22] px-2 py-0.5 rounded border border-cyan-800/60 truncate max-w-[170px] flex items-center space-x-1">
+                          <span className="font-mono text-[10px] text-cyan-300 bg-white/[0.04] px-2 py-0.5 rounded-full border border-white/[0.08] truncate max-w-[170px] flex items-center space-x-1">
                             <Check className="w-2.5 h-2.5 text-emerald-400 shrink-0 inline" />
                             <span>{activeModel || 'default'}</span>
                           </span>
                         </div>
 
                         {/* Quick Clickable Model Chips / Pills */}
-                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto py-0.5">
+                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto py-0.5 no-scrollbar">
                           {[...provider.models, ...(userCustomModels[provider.id] || [])].map((m) => {
                             const isSelected = activeModel === m;
                             const isUserCustom = (userCustomModels[provider.id] || []).includes(m);
@@ -1524,10 +1528,10 @@ export function ProvidersTab({
                               <span
                                 key={m}
                                 onClick={() => handleModelSelect(provider.id, m)}
-                                className={`cursor-pointer inline-flex items-center space-x-1 text-[11px] font-mono px-2 py-0.5 rounded border transition select-none ${
+                                className={`cursor-pointer inline-flex items-center space-x-1 text-[11px] font-mono px-2 py-0.5 rounded-lg border transition select-none ${
                                   isSelected
-                                    ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500 font-bold shadow-sm'
-                                    : 'bg-[#161b22] text-slate-400 hover:text-slate-200 border-[#30363d] hover:border-slate-500'
+                                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-semibold shadow-sm'
+                                    : 'bg-white/[0.03] text-slate-400 hover:text-slate-200 border-white/[0.06] hover:border-white/[0.12]'
                                 }`}
                                 title={`Klik untuk pilih model: ${m}`}
                               >
@@ -1556,9 +1560,9 @@ export function ProvidersTab({
                           <select
                             value={selectedModels[provider.id] || provider.models[0]}
                             onChange={(e) => handleModelSelect(provider.id, e.target.value)}
-                            className="flex-1 bg-[#161b22] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 focus:outline-none"
+                            className="flex-1 input-pro"
                           >
-                            <optgroup label="Model Bawaan">
+                            <optgroup label="Model Bawaan" className="bg-slate-900 text-white">
                               {provider.models.map((m) => (
                                 <option key={m} value={m}>
                                   {m}
@@ -1566,7 +1570,7 @@ export function ProvidersTab({
                               ))}
                             </optgroup>
                             {(userCustomModels[provider.id] || []).length > 0 && (
-                              <optgroup label="Model Custom Anda">
+                              <optgroup label="Model Custom Anda" className="bg-slate-900 text-cyan-300">
                                 {userCustomModels[provider.id].map((m) => (
                                   <option key={m} value={m}>
                                     ⭐ {m}
@@ -1574,7 +1578,7 @@ export function ProvidersTab({
                                 ))}
                               </optgroup>
                             )}
-                            <option value="custom">✏️ + Ketik Custom Model Manual...</option>
+                            <option value="custom" className="bg-slate-900 text-amber-300">✏️ + Ketik Custom Model Manual...</option>
                           </select>
                         </div>
 
@@ -1585,7 +1589,7 @@ export function ProvidersTab({
                             placeholder="Ketik nama model (misal: deepseek-coder-v2, gpt-4.5)..."
                             value={customModelInputs[provider.id] || ''}
                             onChange={(e) => handleCustomModelInputChange(provider.id, e.target.value)}
-                            className="w-full bg-[#161b22] border border-cyan-500/60 rounded-lg px-2.5 py-1.5 text-xs font-mono text-cyan-200 placeholder-slate-600 focus:outline-none"
+                            className="w-full input-pro"
                           />
                         )}
 
@@ -1604,23 +1608,22 @@ export function ProvidersTab({
                                 handleAddCustomModel(provider.id);
                               }
                             }}
-                            className="flex-1 min-w-0 bg-[#161b22] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1 text-[11px] font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                            className="flex-1 min-w-0 input-pro py-1 text-[11px]"
                           />
                           <button
                             type="button"
                             onClick={() => handleAddCustomModel(provider.id)}
-                            className="px-2.5 py-1 rounded bg-[#21262d] hover:bg-cyan-900/60 text-cyan-300 hover:text-cyan-200 border border-[#30363d] text-[11px] font-mono font-semibold flex items-center space-x-1 transition shrink-0"
+                            className="px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-cyan-500/20 text-cyan-300 hover:text-cyan-200 border border-white/[0.08] text-[11px] font-mono font-semibold flex items-center space-x-1 transition shrink-0 active:scale-95"
                             title="Tambahkan model ke daftar provider ini"
                           >
                             <Plus className="w-3 h-3" />
                             <span>Tambah</span>
                           </button>
                         </div>
-
                       </div>
 
                       {/* Ping Footer */}
-                      <div className="flex items-center justify-between pt-2 border-t border-[#30363d]/60 text-xs">
+                      <div className="flex items-center justify-between pt-2 border-t border-white/[0.06] text-xs">
                         <div className="font-mono text-[11px]">
                           {ping?.loading && (
                             <span className="text-cyan-400 flex items-center space-x-1">
@@ -1629,7 +1632,7 @@ export function ProvidersTab({
                             </span>
                           )}
                           {ping && !ping.loading && ping.success && (
-                            <span className="text-emerald-400 font-bold flex items-center space-x-1">
+                            <span className="text-emerald-400 font-semibold flex items-center space-x-1">
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               <span>{ping.latency}ms OK</span>
                             </span>
@@ -1645,7 +1648,7 @@ export function ProvidersTab({
                         <button
                           onClick={() => testProviderPing(provider.id)}
                           disabled={ping?.loading || !hasKey}
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-[#21262d] hover:bg-[#30363d] disabled:opacity-40 text-xs font-semibold text-slate-200 transition"
+                          className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-40 text-xs font-medium text-slate-200 border border-white/[0.08] transition active:scale-95"
                         >
                           <Play className="w-3 h-3 text-cyan-400 fill-current" />
                           <span>Test Model</span>

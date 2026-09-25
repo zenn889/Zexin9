@@ -143,12 +143,12 @@ for chunk in response:
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Header */}
-      <div className="pb-4 sm:pb-6 border-b border-slate-800/80">
+      <div className="pb-4 sm:pb-6 border-b border-white/[0.06]">
         <div className="flex items-center space-x-2">
           <Code2 className="w-5 h-5 text-cyan-400" />
-          <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
             Client Integration & IDE Setup
           </h2>
         </div>
@@ -163,18 +163,18 @@ for chunk in response:
           <button
             key={key}
             onClick={() => setActiveClient(key)}
-            className={`flex items-center space-x-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition active:scale-95 whitespace-nowrap shrink-0 ${
+            className={`flex items-center space-x-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition active:scale-95 whitespace-nowrap shrink-0 ${
               activeClient === key
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 shadow-lg shadow-cyan-500/20'
-                : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-bold shadow-lg shadow-cyan-500/20'
+                : 'bg-white/[0.03] border border-white/[0.08] text-slate-400 hover:text-white hover:bg-white/[0.06]'
             }`}
           >
             <span>{config.title}</span>
             <span
-              className={`text-[9px] font-mono px-1.5 py-0.2 rounded-full uppercase ${
+              className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full uppercase ${
                 activeClient === key
-                  ? 'bg-slate-950 text-cyan-300 font-extrabold'
-                  : 'bg-slate-800 text-slate-400'
+                  ? 'bg-slate-950 text-cyan-300 font-bold'
+                  : 'bg-white/[0.06] text-slate-400'
               }`}
             >
               {config.badge}
@@ -187,27 +187,26 @@ for chunk in response:
       {(() => {
         const client = clientConfigs[activeClient as keyof typeof clientConfigs];
         return (
-          <div className="p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-slate-800/90 bg-gradient-to-b from-slate-900/60 to-slate-950/70 backdrop-blur-xl space-y-5 sm:space-y-6 shadow-2xl">
+          <div className="pro-card p-5 sm:p-8 space-y-5 sm:space-y-6 shadow-2xl">
             <div>
               <div className="flex items-center space-x-2">
                 <h3 className="text-lg sm:text-xl font-bold text-white">{client.title} Configuration</h3>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono">
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-mono font-medium">
                   {client.badge}
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-slate-400 mt-1">{client.description}</p>
             </div>
 
-
             {/* Steps */}
             <div className="space-y-2.5">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 font-mono">
                 Setup Steps:
               </h4>
               <ul className="space-y-2 text-xs sm:text-sm text-slate-300">
                 {client.steps.map((step, idx) => (
                   <li key={idx} className="flex items-start space-x-2.5">
-                    <span className="w-5 h-5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 flex items-center justify-center shrink-0 font-mono text-[11px] font-black">
+                    <span className="w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 flex items-center justify-center shrink-0 font-mono text-[11px] font-bold">
                       {idx + 1}
                     </span>
                     <span>{step}</span>
@@ -217,15 +216,15 @@ for chunk in response:
             </div>
 
             {/* Code Snippet Box */}
-            <div className="relative rounded-2xl overflow-hidden border border-slate-800 shadow-xl">
-              <div className="flex items-center justify-between px-4 py-2.5 bg-slate-950 border-b border-slate-800 text-xs font-mono text-slate-400">
-                <span className="flex items-center space-x-1.5">
+            <div className="relative rounded-2xl overflow-hidden border border-white/[0.08] bg-black/60 shadow-xl">
+              <div className="flex items-center justify-between px-4 py-2.5 bg-black/80 border-b border-white/[0.06] text-xs font-mono text-slate-400">
+                <span className="flex items-center space-x-1.5 text-cyan-300 font-medium">
                   <Terminal className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Configuration Snippet</span>
                 </span>
                 <button
                   onClick={() => handleCopy(activeClient, client.code)}
-                  className="flex items-center space-x-1.5 text-slate-400 hover:text-cyan-300 transition"
+                  className="flex items-center space-x-1.5 text-slate-400 hover:text-white transition px-2 py-0.5 rounded-md hover:bg-white/[0.06]"
                 >
                   {copiedKey === activeClient ? (
                     <>
@@ -240,7 +239,7 @@ for chunk in response:
                   )}
                 </button>
               </div>
-              <pre className="p-5 bg-slate-950/90 text-xs sm:text-sm font-mono text-cyan-300 overflow-x-auto whitespace-pre leading-relaxed">
+              <pre className="p-5 bg-black/40 text-xs sm:text-sm font-mono text-cyan-200 overflow-x-auto whitespace-pre leading-relaxed">
                 {client.code}
               </pre>
             </div>

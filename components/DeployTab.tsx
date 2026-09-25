@@ -129,12 +129,12 @@ export function DeployTab() {
   ];
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8 sm:space-y-10">
       {/* Header */}
-      <div className="pb-6 border-b border-slate-800/80">
+      <div className="pb-4 sm:pb-6 border-b border-white/[0.06]">
         <div className="flex items-center space-x-2">
           <Rocket className="w-5 h-5 text-cyan-400" />
-          <h2 className="text-2xl font-black text-white tracking-tight">
+          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
             Deploy to Vercel & Netlify (Free Serverless)
           </h2>
         </div>
@@ -144,17 +144,17 @@ export function DeployTab() {
       </div>
 
       {/* 2-Column Deploy Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         {/* Vercel Card */}
-        <div className="p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-slate-800 bg-gradient-to-b from-[#0f172a] to-[#070a14] flex flex-col justify-between space-y-6 shadow-2xl relative overflow-hidden group hover:border-slate-700 transition">
+        <div className="pro-card p-5 sm:p-7 flex flex-col justify-between space-y-6 shadow-2xl relative overflow-hidden group">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3.5">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-white text-black flex items-center justify-center font-black text-xl sm:text-2xl shadow-lg">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-white text-black flex items-center justify-center font-black text-xl shadow-lg">
                   ▲
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-white text-base sm:text-lg">Deploy to Vercel</h3>
+                  <h3 className="font-bold text-white text-base">Deploy to Vercel</h3>
                   <span className="text-xs text-cyan-400 font-mono">Edge Latency & SSE Streaming</span>
                 </div>
               </div>
@@ -210,30 +210,29 @@ export function DeployTab() {
         </div>
 
         {/* Netlify Card */}
-        <div className="p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-slate-800 bg-gradient-to-b from-[#0f172a] to-[#070a14] flex flex-col justify-between space-y-6 shadow-2xl relative overflow-hidden group hover:border-slate-700 transition">
+        <div className="pro-card p-5 sm:p-7 flex flex-col justify-between space-y-6 shadow-2xl relative overflow-hidden group">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3.5">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-teal-500 text-white flex items-center justify-center font-black text-xl sm:text-2xl shadow-lg shadow-teal-500/20">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-teal-500 text-slate-950 flex items-center justify-center font-black text-xl shadow-lg shadow-teal-500/20">
                   ◇
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-white text-base sm:text-lg">Deploy to Netlify</h3>
+                  <h3 className="font-bold text-white text-base">Deploy to Netlify</h3>
                   <span className="text-xs text-teal-400 font-mono">Serverless Functions & CDN</span>
                 </div>
               </div>
-              <span className="text-xs font-mono px-3 py-1 rounded-full bg-teal-950 text-teal-300 border border-teal-800 font-bold">
+              <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/20 font-medium">
                 Included netlify.toml
               </span>
             </div>
-
 
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
               Netlify seamlessly provisions Next.js App Router serverless functions using the provided <code className="text-cyan-400">netlify.toml</code> configuration.
             </p>
 
             <div className="space-y-2 text-xs text-slate-300 pt-2">
-              <div className="font-bold text-white uppercase tracking-wider text-[11px] font-mono">
+              <div className="font-semibold text-white uppercase tracking-wider text-[10px] font-mono">
                 Deployment Steps:
               </div>
               <ol className="list-decimal list-inside space-y-1.5 pl-1 text-slate-300">
@@ -246,30 +245,32 @@ export function DeployTab() {
           </div>
 
           {/* 1-Click Deploy Button */}
-          <a
-            href="https://app.netlify.com/start/deploy?repository=https://github.com/zenn889/Zexin9"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full py-3 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs transition flex items-center justify-center space-x-2 shadow-lg shadow-teal-500/20 hover:scale-[1.02] active:scale-95"
-          >
-            <span className="text-sm font-bold">◇</span>
-            <span>1-Click Deploy to Netlify</span>
-            <ExternalLink className="w-3.5 h-3.5 ml-1" />
-          </a>
+          <div className="space-y-4">
+            <a
+              href="https://app.netlify.com/start/deploy?repository=https://github.com/zenn889/Zexin9"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-2.5 rounded-xl bg-teal-400 hover:bg-teal-300 text-slate-950 font-bold text-xs transition flex items-center justify-center space-x-2 shadow-lg shadow-teal-500/20 hover:scale-[1.01] active:scale-95"
+            >
+              <span className="text-sm font-bold">◇</span>
+              <span>1-Click Deploy to Netlify</span>
+              <ExternalLink className="w-3.5 h-3.5 ml-1" />
+            </a>
 
-          <div className="space-y-2 pt-4 border-t border-slate-800/80">
-            <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-              <span>Deploy instantly via CLI:</span>
-              <button
-                onClick={() => handleCopy('netlify-cli', 'npx netlify deploy --build --prod')}
-                className="text-teal-400 hover:text-teal-300 font-bold"
-              >
-                {copiedKey === 'netlify-cli' ? 'Copied!' : 'Copy'}
-              </button>
+            <div className="space-y-1.5 pt-3 border-t border-white/[0.06]">
+              <div className="flex items-center justify-between text-xs font-mono text-slate-400">
+                <span className="text-[11px]">Deploy instantly via CLI:</span>
+                <button
+                  onClick={() => handleCopy('netlify-cli', 'npx netlify deploy --build --prod')}
+                  className="text-teal-400 hover:text-teal-300 font-semibold text-[11px]"
+                >
+                  {copiedKey === 'netlify-cli' ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <pre className="p-3 bg-black/50 border border-white/[0.08] rounded-xl text-xs font-mono text-teal-300 shadow-inner">
+                npx netlify deploy --build --prod
+              </pre>
             </div>
-            <pre className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-teal-300 shadow-inner">
-              npx netlify deploy --build --prod
-            </pre>
           </div>
         </div>
       </div>
@@ -277,31 +278,31 @@ export function DeployTab() {
       {/* Environment Variables Reference Table */}
       <div className="space-y-4">
         <div>
-          <h3 className="text-xl font-bold text-white">Environment Variables Reference</h3>
-          <p className="text-xs sm:text-sm text-slate-400">
+          <h3 className="text-lg font-bold text-white">Environment Variables Reference</h3>
+          <p className="text-xs text-slate-400 mt-0.5">
             Set these in your Vercel or Netlify project dashboard. You only need to add the providers you actually use:
           </p>
         </div>
 
-        <div className="border border-slate-800/90 rounded-2xl overflow-hidden bg-slate-900/40 shadow-xl">
+        <div className="border border-white/[0.06] rounded-2xl overflow-hidden bg-black/30 shadow-xl">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-950/80 border-b border-slate-800 text-slate-400 font-mono">
-                <th className="p-4">Variable Name</th>
-                <th className="p-4">Category</th>
-                <th className="p-4">Description</th>
+              <tr className="bg-white/[0.02] border-b border-white/[0.06] text-slate-400 font-mono text-[10px] uppercase tracking-wider">
+                <th className="p-3.5 font-semibold">Variable Name</th>
+                <th className="p-3.5 font-semibold">Category</th>
+                <th className="p-3.5 font-semibold">Description</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 font-mono">
+            <tbody className="divide-y divide-white/[0.04] font-mono">
               {envVars.map((v) => (
-                <tr key={v.name} className="hover:bg-slate-800/30 transition">
-                  <td className="p-4 text-cyan-300 font-bold">{v.name}</td>
-                  <td className="p-4">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${v.badgeClass}`}>
+                <tr key={v.name} className="hover:bg-white/[0.02] transition">
+                  <td className="p-3.5 text-cyan-300 font-semibold">{v.name}</td>
+                  <td className="p-3.5">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-medium border ${v.badgeClass}`}>
                       {v.status}
                     </span>
                   </td>
-                  <td className="p-4 text-slate-300 font-sans">{v.desc}</td>
+                  <td className="p-3.5 text-slate-300 font-sans">{v.desc}</td>
                 </tr>
               ))}
             </tbody>

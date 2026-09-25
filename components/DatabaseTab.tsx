@@ -326,7 +326,7 @@ ROUTER_API_KEY=master_password_anda`;
           <button
             onClick={handleForceSync}
             disabled={syncing}
-            className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-slate-200 text-xs font-semibold transition disabled:opacity-50"
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-200 text-xs font-semibold transition disabled:opacity-50 active:scale-95"
             title="Tarik data terbaru dari Cloud DB"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin text-cyan-400' : 'text-slate-400'}`} />
@@ -335,10 +335,10 @@ ROUTER_API_KEY=master_password_anda`;
 
           <button
             onClick={handleExportBackup}
-            className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-[#21262d] hover:bg-emerald-950/80 hover:border-emerald-800 border border-[#30363d] text-emerald-300 text-xs font-semibold transition"
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-300 text-xs font-semibold transition active:scale-95"
             title="Download full JSON backup"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-3.5 h-3.5 text-emerald-400" />
             <span>Export Backup</span>
           </button>
         </div>
@@ -361,33 +361,33 @@ ROUTER_API_KEY=master_password_anda`;
       )}
 
       {/* Top Cards: Status Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
         {/* Active Engine Card */}
-        <div className="p-4 rounded-xl bg-[#161b22] border border-[#30363d] relative overflow-hidden">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-            <span className="font-mono text-[11px]">ACTIVE ENGINE</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+        <div className="pro-card p-5 relative overflow-hidden">
+          <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+            <span className="font-mono text-[10px] uppercase tracking-wider font-semibold text-slate-400">ACTIVE ENGINE</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-emerald-400/20 animate-pulse" />
           </div>
-          <div className="flex items-center space-x-2 mt-2">
+          <div className="flex items-center space-x-2 mt-1">
             {status?.activeEngine === 'mongodb' ? (
-              <span className="text-lg font-bold text-emerald-400 flex items-center space-x-1.5">
+              <span className="text-base font-bold text-emerald-400 flex items-center space-x-1.5">
                 <span>🍃</span> <span>MongoDB Atlas</span>
               </span>
             ) : status?.activeEngine === 'supabase' ? (
-              <span className="text-lg font-bold text-teal-400 flex items-center space-x-1.5">
+              <span className="text-base font-bold text-teal-400 flex items-center space-x-1.5">
                 <span>⚡</span> <span>Supabase Cloud</span>
               </span>
             ) : status?.activeEngine === 'redis' ? (
-              <span className="text-lg font-bold text-rose-400 flex items-center space-x-1.5">
+              <span className="text-base font-bold text-rose-400 flex items-center space-x-1.5">
                 <span>⚡</span> <span>Upstash Redis</span>
               </span>
             ) : (
-              <span className="text-lg font-bold text-amber-400 flex items-center space-x-1.5">
+              <span className="text-base font-bold text-amber-400 flex items-center space-x-1.5">
                 <span>📁</span> <span>Local JSON / Mem</span>
               </span>
             )}
           </div>
-          <p className="text-[11px] text-slate-500 font-mono mt-1">
+          <p className="text-[11px] text-slate-500 font-mono mt-2 truncate">
             {status?.activeEngine === 'mongodb'
               ? `Host: ${status.mongodb.host || 'Connected'}`
               : status?.activeEngine === 'supabase'
@@ -397,49 +397,49 @@ ROUTER_API_KEY=master_password_anda`;
         </div>
 
         {/* Synced Logs Card */}
-        <div className="p-4 rounded-xl bg-[#161b22] border border-[#30363d]">
-          <div className="text-xs text-slate-400 font-mono text-[11px] mb-1">LOGS TERSIMPAN</div>
-          <div className="text-2xl font-black text-white font-mono mt-1">
+        <div className="pro-card p-5">
+          <div className="text-xs text-slate-400 font-mono text-[10px] uppercase tracking-wider font-semibold mb-2">LOGS TERSIMPAN</div>
+          <div className="text-3xl font-bold text-white font-mono tracking-tight mt-1">
             {status ? status.counts.logs : '...'}
           </div>
-          <p className="text-[11px] text-slate-500 font-mono mt-1">Maksimum 500 riwayat request</p>
+          <p className="text-[11px] text-slate-500 font-mono mt-2">Maksimum 500 riwayat request</p>
         </div>
 
         {/* Active Client Tokens Card */}
-        <div className="p-4 rounded-xl bg-[#161b22] border border-[#30363d]">
-          <div className="text-xs text-slate-400 font-mono text-[11px] mb-1">CLIENT API TOKENS</div>
-          <div className="text-2xl font-black text-cyan-400 font-mono mt-1">
+        <div className="pro-card p-5">
+          <div className="text-xs text-slate-400 font-mono text-[10px] uppercase tracking-wider font-semibold mb-2">CLIENT API TOKENS</div>
+          <div className="text-3xl font-bold text-cyan-400 font-mono tracking-tight mt-1">
             {status ? status.counts.tokens : '...'}
           </div>
-          <p className="text-[11px] text-slate-500 font-mono mt-1">Token akses proxy klien</p>
+          <p className="text-[11px] text-slate-500 font-mono mt-2">Token akses proxy klien</p>
         </div>
 
         {/* Master Security Key Status */}
-        <div className="p-4 rounded-xl bg-[#161b22] border border-[#30363d]">
-          <div className="text-xs text-slate-400 font-mono text-[11px] mb-1">SECURITY GATE KEY</div>
+        <div className="pro-card p-5">
+          <div className="text-xs text-slate-400 font-mono text-[10px] uppercase tracking-wider font-semibold mb-2">SECURITY GATE KEY</div>
           <div className="flex items-center space-x-1.5 mt-2">
             {status?.counts.hasMasterKey ? (
-              <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800 flex items-center space-x-1">
-                <Shield className="w-3 h-3" />
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 flex items-center space-x-1">
+                <Shield className="w-3 h-3 text-emerald-400" />
                 <span>TERKUNCI & AMAN</span>
               </span>
             ) : (
-              <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-amber-950 text-amber-300 border border-amber-800">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20">
                 BELUM DISET
               </span>
             )}
           </div>
-          <p className="text-[11px] text-slate-500 font-mono mt-1">Tersimpan di database</p>
+          <p className="text-[11px] text-slate-500 font-mono mt-2">Tersimpan di database</p>
         </div>
       </div>
 
       {/* Database Switcher Navigation (Mobile Horizontal Touch Scroll) */}
-      <div className="border-b border-[#30363d] flex space-x-2 sm:space-x-3 overflow-x-auto no-scrollbar whitespace-nowrap pb-1">
+      <div className="border-b border-white/[0.06] flex space-x-2 sm:space-x-3 overflow-x-auto no-scrollbar whitespace-nowrap pb-1">
         <button
           onClick={() => setSelectedDb('mongodb')}
           className={`pb-3 px-3 text-xs font-semibold flex items-center space-x-2 border-b-2 transition shrink-0 ${
             selectedDb === 'mongodb'
-              ? 'border-emerald-500 text-emerald-400'
+              ? 'border-emerald-400 text-emerald-300'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -454,7 +454,7 @@ ROUTER_API_KEY=master_password_anda`;
           onClick={() => setSelectedDb('supabase')}
           className={`pb-3 px-3 text-xs font-semibold flex items-center space-x-2 border-b-2 transition shrink-0 ${
             selectedDb === 'supabase'
-              ? 'border-teal-500 text-teal-400'
+              ? 'border-teal-400 text-teal-300'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -469,7 +469,7 @@ ROUTER_API_KEY=master_password_anda`;
           onClick={() => setSelectedDb('env')}
           className={`pb-3 px-3 text-xs font-semibold flex items-center space-x-2 border-b-2 transition shrink-0 ${
             selectedDb === 'env'
-              ? 'border-cyan-500 text-cyan-400'
+              ? 'border-cyan-400 text-cyan-300'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -482,18 +482,18 @@ ROUTER_API_KEY=master_password_anda`;
       {/* --- TAB 1: MONGODB CONFIGURATION --- */}
       {selectedDb === 'mongodb' && (
         <div className="space-y-6">
-          <div className="p-5 rounded-xl bg-[#161b22] border border-[#30363d] space-y-4">
+          <div className="pro-card p-5 sm:p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center space-x-2">
                   <span>🍃 Setup Koneksi MongoDB Atlas</span>
                   {status?.mongodb.connected && (
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-medium">
                       TERHUBUNG
                     </span>
                   )}
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-400 mt-0.5">
                   Gunakan MongoDB Atlas gratis (M0 Free Tier) atau MongoDB instance Anda sendiri.
                 </p>
               </div>
@@ -511,10 +511,10 @@ ROUTER_API_KEY=master_password_anda`;
             {/* Test Message */}
             {mongoTestMsg && (
               <div
-                className={`p-3 rounded-lg text-xs flex items-center space-x-2 ${
+                className={`p-3 rounded-xl text-xs flex items-center space-x-2 ${
                   mongoTestMsg.success
-                    ? 'bg-emerald-950/70 border border-emerald-700 text-emerald-200'
-                    : 'bg-rose-950/70 border border-rose-700 text-rose-200'
+                    ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-200'
+                    : 'bg-rose-500/10 border border-rose-500/20 text-rose-200'
                 }`}
               >
                 {mongoTestMsg.success ? (
@@ -538,7 +538,7 @@ ROUTER_API_KEY=master_password_anda`;
                     value={mongoUri}
                     onChange={(e) => setMongoUri(e.target.value)}
                     placeholder="mongodb+srv://<username>:<password>@cluster0.abcde.mongodb.net/zexin9?retryWrites=true&w=majority"
-                    className="w-full px-3 py-2 pr-10 rounded-lg bg-[#0d1117] border border-[#30363d] text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
+                    className="w-full input-pro pr-10"
                   />
                   <button
                     type="button"
@@ -565,7 +565,7 @@ ROUTER_API_KEY=master_password_anda`;
                   value={mongoDbName}
                   onChange={(e) => setMongoDbName(e.target.value)}
                   placeholder="zexin9"
-                  className="w-full max-w-sm px-3 py-2 rounded-lg bg-[#0d1117] border border-[#30363d] text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
+                  className="w-full max-w-sm input-pro"
                 />
               </div>
             </div>
@@ -575,7 +575,7 @@ ROUTER_API_KEY=master_password_anda`;
               <button
                 onClick={handleTestMongo}
                 disabled={testingMongo}
-                className="px-4 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-slate-200 text-xs font-semibold transition disabled:opacity-50 flex items-center space-x-1.5"
+                className="px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-200 text-xs font-semibold transition disabled:opacity-50 flex items-center space-x-1.5 active:scale-95"
               >
                 <Zap className={`w-3.5 h-3.5 ${testingMongo ? 'animate-pulse text-amber-400' : 'text-emerald-400'}`} />
                 <span>{testingMongo ? 'Menguji Koneksi...' : 'Test Koneksi MongoDB'}</span>
@@ -584,7 +584,7 @@ ROUTER_API_KEY=master_password_anda`;
               <button
                 onClick={handleSaveMongoConfig}
                 disabled={savingConfig}
-                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/30 transition disabled:opacity-50 flex items-center space-x-1.5"
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/30 transition disabled:opacity-50 flex items-center space-x-1.5 active:scale-95"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>{savingConfig ? 'Menyimpan...' : 'Simpan & Hubungkan MongoDB'}</span>
@@ -593,7 +593,7 @@ ROUTER_API_KEY=master_password_anda`;
           </div>
 
           {/* Quick Guide */}
-          <div className="p-4 rounded-xl bg-[#161b22]/50 border border-[#30363d] space-y-2 text-xs text-slate-300">
+          <div className="pro-card p-4 sm:p-5 space-y-2 text-xs text-slate-300">
             <h4 className="font-bold text-white flex items-center space-x-1.5">
               <span>📖 Panduan Singkat MongoDB Atlas (Gratis):</span>
             </h4>
@@ -611,18 +611,18 @@ ROUTER_API_KEY=master_password_anda`;
       {/* --- TAB 2: SUPABASE CONFIGURATION --- */}
       {selectedDb === 'supabase' && (
         <div className="space-y-6">
-          <div className="p-5 rounded-xl bg-[#161b22] border border-[#30363d] space-y-4">
+          <div className="pro-card p-5 sm:p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center space-x-2">
                   <span>⚡ Setup Koneksi Supabase PostgreSQL</span>
                   {status?.supabase.connected && (
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-teal-950 text-teal-300 border border-teal-800">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/20 font-medium">
                       TERHUBUNG
                     </span>
                   )}
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-400 mt-0.5">
                   Gunakan Supabase Free Tier untuk penyimpanan data PostgreSQL kelas enterprise dengan REST API.
                 </p>
               </div>
@@ -640,10 +640,10 @@ ROUTER_API_KEY=master_password_anda`;
             {/* Test Message */}
             {supabaseTestMsg && (
               <div
-                className={`p-3 rounded-lg text-xs flex items-center space-x-2 ${
+                className={`p-3 rounded-xl text-xs flex items-center space-x-2 ${
                   supabaseTestMsg.success
-                    ? 'bg-teal-950/70 border border-teal-700 text-teal-200'
-                    : 'bg-rose-950/70 border border-rose-700 text-rose-200'
+                    ? 'bg-teal-500/10 border border-teal-500/20 text-teal-200'
+                    : 'bg-rose-500/10 border border-rose-500/20 text-rose-200'
                 }`}
               >
                 {supabaseTestMsg.success ? (
@@ -666,7 +666,7 @@ ROUTER_API_KEY=master_password_anda`;
                   value={supabaseUrl}
                   onChange={(e) => setSupabaseUrl(e.target.value)}
                   placeholder="https://xyzcompany.supabase.co"
-                  className="w-full px-3 py-2 rounded-lg bg-[#0d1117] border border-[#30363d] text-white font-mono text-xs focus:outline-none focus:border-teal-500"
+                  className="w-full input-pro"
                 />
               </div>
 
@@ -681,7 +681,7 @@ ROUTER_API_KEY=master_password_anda`;
                     value={supabaseKey}
                     onChange={(e) => setSupabaseKey(e.target.value)}
                     placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                    className="w-full px-3 py-2 pr-10 rounded-lg bg-[#0d1117] border border-[#30363d] text-white font-mono text-xs focus:outline-none focus:border-teal-500"
+                    className="w-full input-pro pr-10"
                   />
                   <button
                     type="button"
@@ -703,7 +703,7 @@ ROUTER_API_KEY=master_password_anda`;
                   value={supabaseTable}
                   onChange={(e) => setSupabaseTable(e.target.value)}
                   placeholder="nine_router_state"
-                  className="w-full max-w-sm px-3 py-2 rounded-lg bg-[#0d1117] border border-[#30363d] text-white font-mono text-xs focus:outline-none focus:border-teal-500"
+                  className="w-full max-w-sm input-pro"
                 />
               </div>
             </div>
@@ -713,7 +713,7 @@ ROUTER_API_KEY=master_password_anda`;
               <button
                 onClick={handleTestSupabase}
                 disabled={testingSupabase}
-                className="px-4 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-slate-200 text-xs font-semibold transition disabled:opacity-50 flex items-center space-x-1.5"
+                className="px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-200 text-xs font-semibold transition disabled:opacity-50 flex items-center space-x-1.5 active:scale-95"
               >
                 <Zap className={`w-3.5 h-3.5 ${testingSupabase ? 'animate-pulse text-amber-400' : 'text-teal-400'}`} />
                 <span>{testingSupabase ? 'Menguji Koneksi...' : 'Test Koneksi Supabase'}</span>
@@ -722,7 +722,7 @@ ROUTER_API_KEY=master_password_anda`;
               <button
                 onClick={handleSaveSupabaseConfig}
                 disabled={savingConfig}
-                className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold shadow-md shadow-teal-600/30 transition disabled:opacity-50 flex items-center space-x-1.5"
+                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold shadow-md shadow-teal-600/30 transition disabled:opacity-50 flex items-center space-x-1.5 active:scale-95"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>{savingConfig ? 'Menyimpan...' : 'Simpan & Hubungkan Supabase'}</span>
@@ -731,7 +731,7 @@ ROUTER_API_KEY=master_password_anda`;
           </div>
 
           {/* SQL Schema Copy Box */}
-          <div className="p-4 rounded-xl bg-[#161b22] border border-[#30363d] space-y-2">
+          <div className="pro-card p-4 sm:p-5 space-y-2">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold text-white flex items-center space-x-1.5">
                 <FileCode className="w-4 h-4 text-teal-400" />
@@ -739,7 +739,7 @@ ROUTER_API_KEY=master_password_anda`;
               </h4>
               <button
                 onClick={copySql}
-                className="px-2.5 py-1 rounded bg-[#21262d] hover:bg-[#30363d] text-teal-300 text-xs font-mono flex items-center space-x-1"
+                className="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-teal-300 text-xs font-mono flex items-center space-x-1 transition"
               >
                 {copiedSql ? (
                   <>
@@ -754,7 +754,7 @@ ROUTER_API_KEY=master_password_anda`;
                 )}
               </button>
             </div>
-            <pre className="p-3 rounded-lg bg-[#0d1117] border border-[#30363d] font-mono text-[11px] text-teal-200/90 overflow-x-auto">
+            <pre className="p-3.5 rounded-xl bg-[#090d16] border border-white/[0.06] font-mono text-[11px] text-teal-200/90 overflow-x-auto leading-relaxed">
               {supabaseSqlSchema}
             </pre>
           </div>
@@ -764,20 +764,20 @@ ROUTER_API_KEY=master_password_anda`;
       {/* --- TAB 3: ENVIRONMENT VARIABLES GUIDE --- */}
       {selectedDb === 'env' && (
         <div className="space-y-4">
-          <div className="p-5 rounded-xl bg-[#161b22] border border-[#30363d] space-y-3">
+          <div className="pro-card p-5 sm:p-6 space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center space-x-2">
                   <FileCode className="w-4 h-4 text-cyan-400" />
                   <span>Deployment via Environment Variables (Vercel / Netlify / VPS)</span>
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-400 mt-0.5">
                   Untuk deployment produksi di Vercel atau server lain, Anda cukup menambahkan variabel berikut di dashboard Vercel / file <code>.env.local</code>.
                 </p>
               </div>
               <button
                 onClick={copyEnv}
-                className="px-3 py-1.5 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-cyan-300 text-xs font-mono font-semibold flex items-center space-x-1.5"
+                className="px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-cyan-300 text-xs font-mono font-semibold flex items-center space-x-1.5 transition"
               >
                 {copiedEnv ? (
                   <>
@@ -793,7 +793,7 @@ ROUTER_API_KEY=master_password_anda`;
               </button>
             </div>
 
-            <pre className="p-4 rounded-xl bg-[#0d1117] border border-[#30363d] font-mono text-xs text-cyan-200/90 overflow-x-auto leading-relaxed">
+            <pre className="p-4 rounded-xl bg-[#090d16] border border-white/[0.06] font-mono text-xs text-cyan-200/90 overflow-x-auto leading-relaxed">
               {envSample}
             </pre>
           </div>

@@ -78,6 +78,7 @@ export interface CloudflareAccount {
   enabled?: boolean;
   createdAt?: string;
   lastUsedAt?: string;
+  lastTested?: string;
 }
 
 export interface ProviderAccount {
@@ -91,6 +92,7 @@ export interface ProviderAccount {
   priority?: number;
   createdAt?: string;
   lastUsedAt?: string;
+  lastTested?: string;
   lastStatus?: 'ok' | 'rate_limited' | 'error';
   lastError?: string;
   latencyMs?: number;
