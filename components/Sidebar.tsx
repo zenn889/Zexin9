@@ -11,6 +11,7 @@ import {
   Globe2,
   Key,
   Layers,
+  Lock,
   Network,
   Rocket,
   Settings,
@@ -30,6 +31,7 @@ interface SidebarProps {
   cavemanEnabled: boolean;
   setCavemanEnabled: (val: boolean) => void;
   isOnline: boolean;
+  onLogout?: () => void;
 }
 
 export function Sidebar({
@@ -42,6 +44,7 @@ export function Sidebar({
   cavemanEnabled,
   setCavemanEnabled,
   isOnline,
+  onLogout,
 }: SidebarProps) {
   const [copiedToken, setCopiedToken] = React.useState(false);
 
@@ -203,6 +206,16 @@ export function Sidebar({
         <div className="p-2 rounded-lg bg-[#161b22] border border-[#30363d] font-mono text-xs text-slate-300 truncate">
           {effectiveToken}
         </div>
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="w-full mt-2.5 py-1.5 px-3 rounded-lg bg-[#21262d] hover:bg-rose-950/80 hover:border-rose-800 border border-[#30363d] text-slate-300 hover:text-rose-300 text-xs font-mono font-semibold flex items-center justify-center space-x-1.5 transition"
+            title="Kunci Dashboard Web"
+          >
+            <Lock className="w-3.5 h-3.5 text-rose-400" />
+            <span>Kunci Dashboard</span>
+          </button>
+        )}
       </div>
     </aside>
   );

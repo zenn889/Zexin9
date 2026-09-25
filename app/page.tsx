@@ -22,8 +22,9 @@ export default function Home() {
   const [cavemanEnabled, setCavemanEnabled] = useState(false);
 
   // Security / Auth states
-  const [authRequired, setAuthRequired] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [hasMasterKey, setHasMasterKey] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -58,7 +59,7 @@ export default function Home() {
       const authRes = await fetch('/api/auth');
       if (authRes.ok) {
         const authData = await authRes.json();
-        setAuthRequired(Boolean(authData.authRequired));
+        setHasMasterKey(Boolean(authData.hasMasterKey));
         setIsAuthenticated(Boolean(authData.isAuthenticated));
       }
 
@@ -79,7 +80,18 @@ export default function Home() {
       }
     } catch {
       setIsGatewayOnline(false);
+    } finally {
+      setAuthChecking(false);
     }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth', { method: 'DELETE' });
+    } catch {
+      // ignore
+    }
+    setIsAuthenticated(false);
   };
 
   const handleRtkToggle = (val: boolean) => {
@@ -100,13 +112,37 @@ export default function Home() {
     .concat(Object.keys(envConfigured).filter((k) => envConfigured[k]))
     .filter((v, i, a) => a.indexOf(v) === i).length;
 
+  // 1. Loading screen while verifying auth
+  if (authChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0d1117] text-cyan-400">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-white text-2xl shadow-xl shadow-cyan-500/25 border border-cyan-400/30 animate-pulse">
+            9
+          </div>
+          <span className="font-mono text-xs text-slate-400">Memeriksa Keamanan Gateway...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Security Gate: If not authenticated, show ONLY LoginModal
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#0d1117]">
+        <LoginModal
+          hasMasterKey={hasMasterKey}
+          onLoginSuccess={() => {
+            setIsAuthenticated(true);
+            checkAuthAndStatus();
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex bg-[#0d1117] text-slate-100 font-sans">
-      {/* Security Gate: If auth is required and user not authenticated, show Login Modal */}
-      {authRequired && !isAuthenticated && (
-        <LoginModal onLoginSuccess={() => setIsAuthenticated(true)} />
-      )}
-
       {/* 9Router Authentic Left Sidebar */}
       <Sidebar
         activeTab={activeTab}
@@ -118,6 +154,7 @@ export default function Home() {
         cavemanEnabled={cavemanEnabled}
         setCavemanEnabled={handleCavemanToggle}
         isOnline={isGatewayOnline}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Area */}
@@ -128,6 +165,7 @@ export default function Home() {
           baseUrl={baseUrl}
           isOnline={isGatewayOnline}
           onRefresh={checkAuthAndStatus}
+          onLogout={handleLogout}
         />
 
         {/* Dynamic Tab Body */}

@@ -1,78 +1,149 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Lock, Key, Shield, ArrowRight, AlertCircle } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Key,
+  Lock,
+  Shield,
+  Sparkles,
+} from 'lucide-react';
 
 interface LoginModalProps {
   onLoginSuccess: () => void;
+  hasMasterKey?: boolean;
 }
 
-export function LoginModal({ onLoginSuccess }: LoginModalProps) {
+export function LoginModal({ onLoginSuccess, hasMasterKey = true }: LoginModalProps) {
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password.trim()) return;
+    setError('');
+
+    // Setup mode validation
+    if (!hasMasterKey) {
+      if (!password.trim() || password.trim().length < 3) {
+        setError('Access Key minimal 3 karakter.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError('Konfirmasi Access Key tidak cocok!');
+        return;
+      }
+    } else {
+      if (!password.trim()) {
+        setError('Silakan masukkan Access Key.');
+        return;
+      }
+    }
 
     setIsLoading(true);
-    setError('');
 
     try {
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: password.trim() }),
+        body: JSON.stringify({
+          password: password.trim(),
+          action: !hasMasterKey ? 'setup' : undefined,
+        }),
       });
 
       const data = await res.json();
       if (res.ok && data.success) {
         onLoginSuccess();
       } else {
-        setError(data.error || 'Invalid Admin Password');
+        setError(data.error || 'Access Key salah! Akses ditolak.');
       }
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      setError(err.message || 'Gagal menghubungi server.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-      <div className="w-full max-w-md bg-[#0d1117] border border-[#30363d] rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
-        {/* Brand */}
-        <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-white text-2xl mx-auto shadow-lg shadow-cyan-500/25">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d1117]/95 backdrop-blur-2xl p-4 overflow-y-auto">
+      <div className="w-full max-w-md bg-[#161b22] border border-[#30363d] rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6 text-slate-100 relative">
+        {/* Brand & Badge */}
+        <div className="text-center space-y-2.5">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-white text-3xl mx-auto shadow-xl shadow-cyan-500/25 border border-cyan-400/30">
             9
           </div>
-          <h2 className="text-xl font-bold text-white tracking-tight">9Router Security Access</h2>
-          <p className="text-xs text-slate-400">
-            This gateway is password-protected. Enter the Admin Master Key to unlock the dashboard.
-          </p>
+          <div>
+            <h2 className="text-xl font-black text-white tracking-tight flex items-center justify-center space-x-2">
+              <Lock className="w-5 h-5 text-cyan-400" />
+              <span>9Router Security Gate</span>
+            </h2>
+            <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
+              {!hasMasterKey
+                ? 'Tentukan Kunci Akses (Master Key) pertama kali untuk mengamankan web dashboard ini.'
+                : 'Web ini terproteksi. Masukkan Kunci Akses (Master Key) untuk membuka dashboard.'}
+            </p>
+          </div>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-xs font-mono text-slate-400 block mb-1.5">
-              ADMIN MASTER PASSWORD
+            <label className="text-xs font-mono text-slate-300 font-semibold block mb-1.5 flex items-center justify-between">
+              <span>{!hasMasterKey ? 'BUAT ACCESS KEY BARU' : 'MASUKKAN ACCESS KEY'}</span>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-slate-400 hover:text-slate-200 text-[11px] font-sans flex items-center space-x-1"
+              >
+                {showPassword ? (
+                  <>
+                    <EyeOff className="w-3 h-3" />
+                    <span>Sembunyikan</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-3 h-3" />
+                    <span>Lihat</span>
+                  </>
+                )}
+              </button>
             </label>
             <div className="relative flex items-center">
               <input
-                type="password"
-                placeholder="Enter password..."
+                type={showPassword ? 'text' : 'password'}
+                placeholder={!hasMasterKey ? 'Ketik Access Key baru...' : 'Masukkan Kunci Akses web...'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoFocus
-                className="w-full bg-[#161b22] border border-[#30363d] focus:border-cyan-500 rounded-xl px-4 py-2.5 text-xs font-mono text-slate-100 placeholder-slate-600 focus:outline-none transition shadow-inner"
+                className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-xl px-4 py-2.5 text-xs font-mono text-cyan-200 placeholder-slate-600 focus:outline-none transition shadow-inner"
               />
             </div>
           </div>
 
+          {!hasMasterKey && (
+            <div>
+              <label className="text-xs font-mono text-slate-300 font-semibold block mb-1.5">
+                KONFIRMASI ACCESS KEY
+              </label>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Ulangi Access Key baru..."
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-xl px-4 py-2.5 text-xs font-mono text-cyan-200 placeholder-slate-600 focus:outline-none transition shadow-inner"
+              />
+            </div>
+          )}
+
           {error && (
-            <div className="flex items-center space-x-2 text-rose-400 text-xs font-mono bg-rose-950/40 border border-rose-900/60 p-2.5 rounded-lg">
+            <div className="flex items-center space-x-2 text-rose-400 text-xs font-mono bg-rose-950/50 border border-rose-900/80 p-2.5 rounded-lg animate-shake">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -81,15 +152,25 @@ export function LoginModal({ onLoginSuccess }: LoginModalProps) {
           <button
             type="submit"
             disabled={isLoading || !password.trim()}
-            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-40 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition flex items-center justify-center space-x-2"
+            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-40 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition flex items-center justify-center space-x-2 active:scale-98"
           >
-            <span>{isLoading ? 'Authenticating...' : 'Unlock Gateway'}</span>
+            <span>
+              {isLoading
+                ? 'Memverifikasi...'
+                : !hasMasterKey
+                ? 'Simpan Kunci & Buka Akses'
+                : 'Buka Dashboard'}
+            </span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </form>
 
-        <div className="text-[11px] text-slate-500 text-center font-mono pt-2 border-t border-[#30363d]/60">
-          Protected by AES-256 Auth & Rate Limiter
+        <div className="pt-2 border-t border-[#30363d] flex items-center justify-between text-[11px] font-mono text-slate-500">
+          <span className="flex items-center space-x-1">
+            <Shield className="w-3 h-3 text-cyan-400" />
+            <span>AES-256 Auth Shield</span>
+          </span>
+          <span className="text-slate-400">9Router v1.0</span>
         </div>
       </div>
     </div>

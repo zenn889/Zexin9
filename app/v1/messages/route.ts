@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now();
 
   try {
-    const gatewaySecret = getGatewaySecret();
+    const gatewaySecret = getGatewaySecret() || db.getMasterKey();
     const clientKey =
       req.headers.get('x-api-key') ||
       req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||

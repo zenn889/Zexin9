@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const xApiKey = req.headers.get('x-api-key') || '';
     const clientToken = authHeader.replace(/^Bearer\s+/i, '').trim() || xApiKey.trim();
 
-    const gatewaySecret = getGatewaySecret();
+    const gatewaySecret = getGatewaySecret() || db.getMasterKey();
     const hasSecretConfigured = Boolean(gatewaySecret && gatewaySecret.trim().length > 0);
 
     if (hasSecretConfigured) {

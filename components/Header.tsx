@@ -7,6 +7,7 @@ import {
   ExternalLink,
   Globe,
   HardDrive,
+  Lock,
   RefreshCw,
   Terminal,
   Zap,
@@ -17,9 +18,16 @@ interface HeaderProps {
   baseUrl: string;
   isOnline: boolean;
   onRefresh: () => void;
+  onLogout?: () => void;
 }
 
-export function Header({ activeTab, baseUrl, isOnline, onRefresh }: HeaderProps) {
+export function Header({
+  activeTab,
+  baseUrl,
+  isOnline,
+  onRefresh,
+  onLogout,
+}: HeaderProps) {
   const [copiedUrl, setCopiedUrl] = useState(false);
 
   const effectiveBaseUrl = baseUrl ? `${baseUrl}/v1` : 'https://your-9router.vercel.app/v1';
@@ -91,6 +99,18 @@ export function Header({ activeTab, baseUrl, isOnline, onRefresh }: HeaderProps)
         >
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
+
+        {/* Lock Web Button */}
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="px-2.5 py-1.5 rounded-lg bg-[#21262d] hover:bg-rose-950/80 hover:border-rose-800 border border-[#30363d] text-slate-300 hover:text-rose-300 transition flex items-center space-x-1.5 text-xs font-mono"
+            title="Kunci Dashboard (Lock Web)"
+          >
+            <Lock className="w-3.5 h-3.5 text-rose-400" />
+            <span className="hidden sm:inline">Kunci Web</span>
+          </button>
+        )}
       </div>
     </header>
   );

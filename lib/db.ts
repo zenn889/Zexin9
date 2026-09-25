@@ -29,6 +29,7 @@ export interface ClientToken {
 // In-memory runtime cache for serverless speed
 let memoryLogs: RequestLog[] = [];
 let memoryTokens: ClientToken[] = [];
+let memoryMasterKey: string = (process.env.ROUTER_API_KEY || process.env.GATEWAY_SECRET || '').trim();
 
 const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -57,6 +58,9 @@ function loadData() {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed.logs)) memoryLogs = parsed.logs;
       if (Array.isArray(parsed.tokens)) memoryTokens = parsed.tokens;
+      if (typeof parsed.masterKey === 'string' && parsed.masterKey.trim().length > 0) {
+        memoryMasterKey = parsed.masterKey.trim();
+      }
     }
   } catch {
     // ignore read error, fallback to memory
@@ -67,6 +71,7 @@ function persistData() {
   const data = {
     logs: memoryLogs.slice(0, 500), // retain latest 500 logs
     tokens: memoryTokens,
+    masterKey: memoryMasterKey,
   };
 
   // 1. Persist to local file or /tmp
@@ -149,13 +154,24 @@ export const db = {
     return false;
   },
 
+  // --- Master Key Management ---
+  getMasterKey(): string {
+    loadData();
+    return (process.env.ROUTER_API_KEY || process.env.GATEWAY_SECRET || memoryMasterKey || '').trim();
+  },
+
+  setMasterKey(key: string): void {
+    memoryMasterKey = key.trim();
+    persistData();
+  },
+
   verifyToken(providedToken: string): boolean {
     if (!providedToken) return false;
     const cleanToken = providedToken.replace(/^Bearer\s+/i, '').trim();
 
-    // Check against global env secret
-    const globalSecret = process.env.ROUTER_API_KEY || process.env.GATEWAY_SECRET;
-    if (globalSecret && cleanToken === globalSecret.trim()) {
+    // Check against global env secret or stored master key
+    const master = this.getMasterKey();
+    if (master && cleanToken === master) {
       return true;
     }
 
@@ -169,8 +185,8 @@ export const db = {
       return true;
     }
 
-    // If no secret or token is configured, allow open local access
-    if (!globalSecret && memoryTokens.length === 0) {
+    // If no secret or token is configured, allow open access
+    if (!master && memoryTokens.length === 0) {
       return true;
     }
 
