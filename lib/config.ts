@@ -9,9 +9,14 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     priority: 1,
     models: [
       'claude-3-7-sonnet-20250219',
+      'claude-3-7-sonnet-latest',
       'claude-3-5-sonnet-20241022',
+      'claude-3-5-sonnet-latest',
       'claude-3-5-haiku-20241022',
+      'claude-3-5-haiku-latest',
       'claude-3-opus-20240229',
+      'claude-3-opus-latest',
+      'claude-3-haiku-20240307',
     ],
   },
   {
@@ -23,9 +28,16 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     models: [
       'gpt-4o',
       'gpt-4o-mini',
-      'o1',
       'o3-mini',
+      'o3-mini-high',
+      'o1',
+      'o1-mini',
+      'o1-preview',
+      'gpt-4.5-preview',
+      'chatgpt-4o-latest',
       'gpt-4-turbo',
+      'gpt-4',
+      'gpt-3.5-turbo',
     ],
   },
   {
@@ -36,9 +48,14 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     priority: 3,
     models: [
       'gemini-2.0-flash',
+      'gemini-2.0-flash-lite',
       'gemini-2.0-flash-thinking-exp-01-21',
+      'gemini-2.0-pro-exp-02-05',
       'gemini-1.5-pro',
+      'gemini-1.5-pro-latest',
       'gemini-1.5-flash',
+      'gemini-1.5-flash-8b',
+      'gemini-1.5-flash-latest',
     ],
   },
   {
@@ -50,6 +67,14 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     models: [
       'deepseek-chat',
       'deepseek-reasoner',
+      'deepseek-v4.1-flash',
+      'deepseek-v4',
+      'deepseek-v3',
+      'deepseek-coder',
+      'deepseek-coder-v2.5',
+      'deepseek-coder-33b-instruct',
+      'deepseek-ai/DeepSeek-V3',
+      'deepseek-ai/DeepSeek-R1',
     ],
   },
   {
@@ -61,8 +86,13 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     models: [
       'llama-3.3-70b-versatile',
       'llama-3.1-8b-instant',
-      'mixtral-8x7b-32768',
+      'llama-3.2-11b-vision-preview',
+      'llama-3.2-90b-vision-preview',
       'deepseek-r1-distill-llama-70b',
+      'deepseek-r1-distill-qwen-32b',
+      'qwen-2.5-coder-32b',
+      'mixtral-8x7b-32768',
+      'gemma2-9b-it',
     ],
   },
   {
@@ -72,10 +102,16 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     enabled: true,
     priority: 6,
     models: [
+      'anthropic/claude-3.7-sonnet',
       'anthropic/claude-3.5-sonnet',
       'openai/gpt-4o',
-      'google/gemini-2.0-flash-001',
+      'openai/o3-mini',
       'deepseek/deepseek-r1',
+      'deepseek/deepseek-chat',
+      'google/gemini-2.0-flash-001',
+      'google/gemini-2.0-pro-exp-02-05:free',
+      'qwen/qwen-2.5-coder-32b-instruct',
+      'meta-llama/llama-3.3-70b-instruct',
     ],
   },
   {
@@ -86,8 +122,12 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     priority: 7,
     models: [
       'codestral-latest',
+      'codestral-2501',
       'mistral-large-latest',
+      'mistral-medium-latest',
       'mistral-small-latest',
+      'ministral-8b-latest',
+      'ministral-3b-latest',
     ],
   },
   {
@@ -99,6 +139,9 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     models: [
       'Qwen/Qwen2.5-Coder-32B-Instruct',
       'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+      'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
+      'deepseek-ai/DeepSeek-R1',
+      'deepseek-ai/DeepSeek-V3',
     ],
   },
   {
@@ -108,10 +151,13 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     enabled: true,
     priority: 9,
     models: [
-      '@cf/meta/llama-3.3-70b-instruct',
       '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',
+      '@cf/meta/llama-3.3-70b-instruct',
       '@cf/qwen/qwen2.5-coder-32b-instruct',
       '@cf/meta/llama-3.1-8b-instruct',
+      '@cf/meta/llama-3.1-70b-instruct',
+      '@cf/mistral/mistral-7b-instruct-v0.1',
+      '@cf/google/gemma-7b-it',
     ],
   },
   {
@@ -123,6 +169,7 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     models: [
       'llama-3.3-70b',
       'llama3.1-8b',
+      'llama3.1-70b',
     ],
   },
   {
@@ -134,7 +181,11 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     models: [
       'deepseek-ai/DeepSeek-V3',
       'deepseek-ai/DeepSeek-R1',
+      'deepseek-ai/DeepSeek-V2.5',
       'Qwen/Qwen2.5-Coder-32B-Instruct',
+      'Qwen/Qwen2.5-72B-Instruct',
+      'Qwen/Qwen2.5-Coder-7B-Instruct',
+      'meta-llama/Meta-Llama-3.1-70B-Instruct',
     ],
   },
   {
@@ -146,6 +197,9 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     models: [
       'sonar-pro',
       'sonar',
+      'sonar-reasoning',
+      'sonar-reasoning-pro',
+      'r1-1776',
     ],
   },
   {
@@ -156,7 +210,12 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     priority: 13,
     models: [
       'qwen2.5-coder:latest',
+      'qwen2.5-coder:32b',
       'llama3.3:latest',
+      'deepseek-r1:latest',
+      'deepseek-r1:14b',
+      'deepseek-r1:32b',
+      'mistral:latest',
     ],
   },
 ];

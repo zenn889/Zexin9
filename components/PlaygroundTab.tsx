@@ -59,12 +59,26 @@ export function PlaygroundTab({
   const [isLoading, setIsLoading] = useState(false);
   const [currentResponse, setCurrentResponse] = useState('');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [userCustomModels, setUserCustomModels] = useState<Record<string, string[]>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedUserModels = localStorage.getItem('9router_user_models');
+      if (storedUserModels) {
+        try {
+          setUserCustomModels(JSON.parse(storedUserModels));
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
@@ -254,15 +268,23 @@ export function PlaygroundTab({
                 </option>
               ))}
             </optgroup>
-            {DEFAULT_PROVIDERS.map((p) => (
-              <optgroup key={p.id} label={`🔹 ${p.name}`}>
-                {p.models.map((m) => (
-                  <option key={`${p.id}-${m}`} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
+            {DEFAULT_PROVIDERS.map((p) => {
+              const customList = userCustomModels[p.id] || [];
+              return (
+                <optgroup key={p.id} label={`🔹 ${p.name}`}>
+                  {p.models.map((m) => (
+                    <option key={`${p.id}-${m}`} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                  {customList.map((m) => (
+                    <option key={`${p.id}-custom-${m}`} value={m}>
+                      ⭐ {m}
+                    </option>
+                  ))}
+                </optgroup>
+              );
+            })}
             <optgroup label="✏️ Custom">
               <option value="custom">+ Ketik Custom Model Manual</option>
             </optgroup>
