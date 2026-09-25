@@ -69,3 +69,14 @@ export interface GatewayStats {
   tokensSavedEstimate: number;
   lastActive: string;
 }
+
+export interface CloudflareAccount {
+  id: string;
+  name: string;
+  accountId: string;
+  apiToken: string;
+  enabled?: boolean;
+  createdAt?: string;
+  lastUsedAt?: string;
+}
+

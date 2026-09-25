@@ -5,10 +5,12 @@ import {
   DEFAULT_FALLBACK_GROUPS,
   DEFAULT_PROVIDERS,
   getProviderApiKey,
+  getProviderApiKeys,
   getProviderBaseUrl,
+  getEffectiveCloudflareAccounts,
 } from './config';
 import { optimizeMessages } from './optimizer';
-import { ChatCompletionRequest, ChatMessage, ProviderId } from './types';
+import { ChatCompletionRequest, ChatMessage, ProviderId, CloudflareAccount } from './types';
 
 export interface RouteCandidate {
   provider: ProviderId;
@@ -21,6 +23,7 @@ export interface RouterExecutionResult {
   servedModel: string;
   fallbackCount: number;
   tokensSaved: number;
+  cfAccountUsed?: string;
 }
 
 /**
@@ -248,7 +251,11 @@ export function resolveCandidates(
   // 3. Multi-Provider Pool Inclusion: Append ANY provider configured by the user that has a key
   for (const prov of DEFAULT_PROVIDERS) {
     if (!candidates.some((c) => c.provider === prov.id)) {
-      const hasKey = Boolean(getProviderApiKey(prov.id, headerKeys));
+      const hasKey =
+        prov.id === 'cloudflare'
+          ? getEffectiveCloudflareAccounts(headerKeys).some((a) => a.enabled !== false) ||
+            Boolean(getProviderApiKey('cloudflare', headerKeys))
+          : Boolean(getProviderApiKey(prov.id, headerKeys));
       if (hasKey) {
         candidates.push({ provider: prov.id, model: prov.models[0] });
       }
@@ -258,8 +265,97 @@ export function resolveCandidates(
   return candidates;
 }
 
+// Global round-robin pointer for Cloudflare accounts pool
+let cfRoundRobinIdx = 0;
+
 /**
- * Dispatch chat completion request to a specific provider
+ * Executes a call across the pooled Cloudflare accounts.
+ * Automatically round-robins requests and fails over to the next account
+ * if an account reaches its 10,000 neurons/day quota (HTTP 429) or errors out.
+ */
+export async function executeCloudflarePoolCall(
+  model: string,
+  request: ChatCompletionRequest,
+  headerKeys: Record<string, string> = {}
+): Promise<{ response: Response; accountUsed?: CloudflareAccount; errors: string[] }> {
+  const accounts = getEffectiveCloudflareAccounts(headerKeys).filter((a) => a.enabled !== false);
+
+  if (accounts.length === 0) {
+    return {
+      response: new Response(
+        JSON.stringify({ error: 'Tidak ada akun Cloudflare yang terkonfigurasi atau aktif.' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      ),
+      errors: ['Tidak ada akun Cloudflare yang aktif di pool.'],
+    };
+  }
+
+  const targetModel = normalizeModelForProvider('cloudflare', model);
+  const sanitizedMessages = sanitizeMessages(request.messages);
+  const reqWithTargetModel: ChatCompletionRequest = {
+    ...request,
+    model: targetModel,
+    messages: sanitizedMessages,
+  };
+
+  const startIdx = cfRoundRobinIdx % accounts.length;
+  cfRoundRobinIdx++;
+
+  let lastResponse: Response | null = null;
+  const cfErrors: string[] = [];
+
+  for (let offset = 0; offset < accounts.length; offset++) {
+    const account = accounts[(startIdx + offset) % accounts.length];
+    const baseUrl = `https://api.cloudflare.com/client/v4/accounts/${account.accountId.trim()}/ai/v1`;
+
+    try {
+      const res = await callOpenAICompatible(baseUrl, account.apiToken.trim(), reqWithTargetModel);
+      if (res.ok) {
+        account.lastUsedAt = new Date().toISOString();
+        return { response: res, accountUsed: account, errors: cfErrors };
+      }
+
+      // If failed (e.g. 429 Quota Exceeded / Rate Limit, 401, 403, 500)
+      const errorText = await res.clone().text().catch(() => '');
+      let parsedMsg = errorText.slice(0, 150);
+      try {
+        const parsed = JSON.parse(errorText);
+        if (parsed?.errors?.[0]?.message) {
+          parsedMsg = parsed.errors[0].message;
+        } else if (parsed?.error?.message) {
+          parsedMsg = parsed.error.message;
+        }
+      } catch {}
+
+      const logMsg = `Akun "${account.name}" (${account.accountId.slice(0, 6)}...): Status ${res.status} - ${parsedMsg}`;
+      cfErrors.push(logMsg);
+      lastResponse = res;
+      // Continue loop to failover automatically to the next Cloudflare account!
+    } catch (err: any) {
+      cfErrors.push(`Akun "${account.name}": Network Error - ${err.message || err}`);
+    }
+  }
+
+  // If all accounts in pool failed:
+  return {
+    response:
+      lastResponse ||
+      new Response(
+        JSON.stringify({
+          error: {
+            message: `Semua (${accounts.length}) akun Cloudflare di pool gagal memproses request.`,
+            details: cfErrors,
+          },
+        }),
+        { status: 429, headers: { 'Content-Type': 'application/json' } }
+      ),
+    errors: cfErrors,
+  };
+}
+
+/**
+ * Dispatch chat completion request to a specific provider.
+ * Supports multi-key rotation and failover for providers configured with multiple keys.
  */
 export async function executeProviderCall(
   provider: ProviderId,
@@ -267,10 +363,10 @@ export async function executeProviderCall(
   request: ChatCompletionRequest,
   headerKeys: Record<string, string> = {}
 ): Promise<Response> {
-  const apiKey = getProviderApiKey(provider, headerKeys);
+  const apiKeys = getProviderApiKeys(provider, headerKeys);
   const baseUrl = getProviderBaseUrl(provider, headerKeys);
 
-  if (!apiKey && provider !== 'custom') {
+  if (apiKeys.length === 0 && provider !== 'custom') {
     return new Response(
       JSON.stringify({ error: `API key not configured for provider: ${provider}` }),
       { status: 401, headers: { 'Content-Type': 'application/json' } }
@@ -287,25 +383,51 @@ export async function executeProviderCall(
     messages: sanitizedMessages,
   };
 
-  switch (provider) {
-    case 'anthropic':
-      return await callAnthropic(baseUrl, apiKey || '', reqWithTargetModel);
-    case 'gemini':
-      return await callGemini(baseUrl, apiKey || '', reqWithTargetModel);
-    case 'openai':
-    case 'deepseek':
-    case 'groq':
-    case 'openrouter':
-    case 'mistral':
-    case 'together':
-    case 'cloudflare':
-    case 'cerebras':
-    case 'siliconflow':
-    case 'perplexity':
-    case 'custom':
-    default:
-      return await callOpenAICompatible(baseUrl, apiKey || '', reqWithTargetModel);
+  const callWithKey = async (apiKey: string) => {
+    switch (provider) {
+      case 'anthropic':
+        return await callAnthropic(baseUrl, apiKey, reqWithTargetModel);
+      case 'gemini':
+        return await callGemini(baseUrl, apiKey, reqWithTargetModel);
+      case 'openai':
+      case 'deepseek':
+      case 'groq':
+      case 'openrouter':
+      case 'mistral':
+      case 'together':
+      case 'cloudflare':
+      case 'cerebras':
+      case 'siliconflow':
+      case 'perplexity':
+      case 'custom':
+      default:
+        return await callOpenAICompatible(baseUrl, apiKey, reqWithTargetModel);
+    }
+  };
+
+  // If multiple keys configured, try each on rate limit (429) or auth error (401/403)
+  let lastRes: Response | null = null;
+  for (let i = 0; i < apiKeys.length; i++) {
+    const key = apiKeys[i];
+    try {
+      const res = await callWithKey(key);
+      if (res.ok) {
+        return res;
+      }
+      lastRes = res;
+      if ((res.status === 429 || res.status === 401 || res.status === 403) && i < apiKeys.length - 1) {
+        continue;
+      }
+      return res;
+    } catch (e) {
+      if (i === apiKeys.length - 1) throw e;
+    }
   }
+
+  return (
+    lastRes ||
+    new Response(JSON.stringify({ error: 'No response from provider' }), { status: 500 })
+  );
 }
 
 /**
@@ -335,11 +457,15 @@ export async function routeChatCompletion(
 
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
+    const isCloudflare = candidate.provider === 'cloudflare';
+    const cfAccounts = isCloudflare
+      ? getEffectiveCloudflareAccounts(headerKeys).filter((a) => a.enabled !== false)
+      : [];
     const apiKey = getProviderApiKey(candidate.provider, headerKeys);
 
-    // Skip candidate if no API key is available
-    if (!apiKey && candidate.provider !== 'custom') {
-      failureLogs.push(`[${candidate.provider}/${candidate.model}]: Dilewati (API key belum diisi)`);
+    // Skip candidate if no API key is available (and no active CF accounts if cloudflare)
+    if (!apiKey && (!isCloudflare || cfAccounts.length === 0) && candidate.provider !== 'custom') {
+      failureLogs.push(`[${candidate.provider}/${candidate.model}]: Dilewati (API key / akun belum diisi)`);
       continue;
     }
 
@@ -348,12 +474,25 @@ export async function routeChatCompletion(
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const res = await executeProviderCall(
-        candidate.provider,
-        candidate.model,
-        request,
-        headerKeys
-      );
+      let res: Response;
+      let cfAccountUsedName: string | undefined;
+
+      if (isCloudflare && cfAccounts.length > 0) {
+        // Multi-Account Cloudflare Pool execution with automatic quota failover
+        const cfResult = await executeCloudflarePoolCall(candidate.model, request, headerKeys);
+        res = cfResult.response;
+        cfAccountUsedName = cfResult.accountUsed?.name;
+        if (cfResult.errors.length > 0) {
+          failureLogs.push(...cfResult.errors.map((e) => `[cloudflare pool]: ${e}`));
+        }
+      } else {
+        res = await executeProviderCall(
+          candidate.provider,
+          candidate.model,
+          request,
+          headerKeys
+        );
+      }
       clearTimeout(timeoutId);
 
       // If success, return response immediately!
@@ -364,6 +503,7 @@ export async function routeChatCompletion(
           servedModel: normalizeModelForProvider(candidate.provider, candidate.model),
           fallbackCount,
           tokensSaved,
+          cfAccountUsed: cfAccountUsedName,
         };
       }
 

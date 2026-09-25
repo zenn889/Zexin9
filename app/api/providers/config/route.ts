@@ -19,6 +19,7 @@ export async function GET() {
       keys: settings.keys,
       baseUrls: settings.baseUrls,
       cfAccountId: settings.cfAccountId,
+      cfAccounts: settings.cfAccounts || [],
       statusMap,
     });
   } catch (error: any) {
@@ -32,16 +33,16 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { keys = {}, baseUrls = {}, cfAccountId = '' } = body;
+    const { keys = {}, baseUrls = {}, cfAccountId = '', cfAccounts = [] } = body;
 
-    db.setProviderSettings(keys, baseUrls, cfAccountId);
+    db.setProviderSettings(keys, baseUrls, cfAccountId, cfAccounts);
 
     const updated = db.getProviderSettings();
     const activeCount = Object.keys(updated.keys).filter((k) => updated.keys[k]?.trim()).length;
 
     return NextResponse.json({
       success: true,
-      message: `Berhasil menyimpan ${activeCount} provider keys ke database cloud!`,
+      message: `Berhasil menyimpan ${activeCount} provider keys dan ${updated.cfAccounts?.length || 0} akun Cloudflare!`,
       activeCount,
       settings: updated,
     });

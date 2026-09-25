@@ -6,7 +6,9 @@ import {
   setRuntimeStoredKeys,
   setRuntimeStoredBaseUrls,
   setRuntimeCfAccountId,
+  setRuntimeCfAccounts,
 } from './config';
+import { CloudflareAccount } from './types';
 
 export interface RequestLog {
   id: string;
@@ -49,6 +51,7 @@ let memoryMasterKey: string = (process.env.ROUTER_API_KEY || process.env.GATEWAY
 let memoryProviderKeys: Record<string, string> = {};
 let memoryProviderBaseUrls: Record<string, string> = {};
 let memoryCfAccountId: string = '';
+let memoryCfAccounts: CloudflareAccount[] = [];
 
 // Runtime DB configuration
 let runtimeDbConfig: DbConfig = {};
@@ -137,8 +140,16 @@ function loadData() {
         memoryCfAccountId = '';
       }
       setRuntimeCfAccountId(memoryCfAccountId);
+
+      if (Array.isArray(parsed.cfAccounts)) {
+        memoryCfAccounts = parsed.cfAccounts;
+      } else {
+        memoryCfAccounts = [];
+      }
+      setRuntimeCfAccounts(memoryCfAccounts);
     }
   } catch {
+
     // ignore read error, fallback to memory
   }
 }
@@ -233,6 +244,7 @@ async function persistToCloud(data: {
   providerKeys: Record<string, string>;
   providerBaseUrls: Record<string, string>;
   cfAccountId: string;
+  cfAccounts: CloudflareAccount[];
 }) {
   // 1. MongoDB
   const mongoUri = getEffectiveMongoUri();
@@ -251,6 +263,7 @@ async function persistToCloud(data: {
               providerKeys: data.providerKeys,
               providerBaseUrls: data.providerBaseUrls,
               cfAccountId: data.cfAccountId,
+              cfAccounts: data.cfAccounts,
               updatedAt: new Date().toISOString(),
             },
           },
@@ -276,6 +289,7 @@ async function persistToCloud(data: {
           providerKeys: data.providerKeys,
           providerBaseUrls: data.providerBaseUrls,
           cfAccountId: data.cfAccountId,
+          cfAccounts: data.cfAccounts,
         },
         updated_at: new Date().toISOString(),
       });
@@ -311,7 +325,9 @@ function persistData() {
     providerKeys: memoryProviderKeys,
     providerBaseUrls: memoryProviderBaseUrls,
     cfAccountId: memoryCfAccountId,
+    cfAccounts: memoryCfAccounts,
   };
+
 
   // 1. Local filesystem persistence
   try {
@@ -474,6 +490,10 @@ export const db = {
               memoryCfAccountId = doc.cfAccountId;
               setRuntimeCfAccountId(memoryCfAccountId);
             }
+            if (Array.isArray(doc.cfAccounts)) {
+              memoryCfAccounts = doc.cfAccounts;
+              setRuntimeCfAccounts(memoryCfAccounts);
+            }
             syncedSource = 'mongodb';
             // update local cache file
             const filePath = getDataFilePath();
@@ -486,6 +506,7 @@ export const db = {
                 providerKeys: memoryProviderKeys,
                 providerBaseUrls: memoryProviderBaseUrls,
                 cfAccountId: memoryCfAccountId,
+                cfAccounts: memoryCfAccounts,
               }),
               'utf-8'
             );
@@ -532,6 +553,10 @@ export const db = {
             memoryCfAccountId = state.cfAccountId;
             setRuntimeCfAccountId(memoryCfAccountId);
           }
+          if (Array.isArray(state.cfAccounts)) {
+            memoryCfAccounts = state.cfAccounts;
+            setRuntimeCfAccounts(memoryCfAccounts);
+          }
           syncedSource = 'supabase';
           const filePath = getDataFilePath();
           fs.writeFileSync(
@@ -543,6 +568,7 @@ export const db = {
               providerKeys: memoryProviderKeys,
               providerBaseUrls: memoryProviderBaseUrls,
               cfAccountId: memoryCfAccountId,
+              cfAccounts: memoryCfAccounts,
             }),
             'utf-8'
           );
@@ -746,13 +772,15 @@ export const db = {
       keys: { ...memoryProviderKeys },
       baseUrls: { ...memoryProviderBaseUrls },
       cfAccountId: memoryCfAccountId,
+      cfAccounts: [...memoryCfAccounts],
     };
   },
 
   setProviderSettings(
     keys: Record<string, string>,
     baseUrls: Record<string, string> = {},
-    cfAccountId: string = ''
+    cfAccountId: string = '',
+    cfAccounts?: CloudflareAccount[]
   ) {
     loadData();
     // Clean and update keys (only keep non-empty trimmed keys)
@@ -776,6 +804,13 @@ export const db = {
       memoryCfAccountId = cfAccountId.trim();
     }
 
+    if (Array.isArray(cfAccounts)) {
+      memoryCfAccounts = cfAccounts.filter(
+        (acc) => acc && typeof acc.accountId === 'string' && typeof acc.apiToken === 'string'
+      );
+      setRuntimeCfAccounts(memoryCfAccounts);
+    }
+
     setRuntimeStoredKeys(memoryProviderKeys);
     setRuntimeStoredBaseUrls(memoryProviderBaseUrls);
     if (memoryCfAccountId) {
@@ -796,6 +831,7 @@ export const db = {
       providerKeys: memoryProviderKeys,
       providerBaseUrls: memoryProviderBaseUrls,
       cfAccountId: memoryCfAccountId,
+      cfAccounts: memoryCfAccounts,
       logs: memoryLogs,
       stats: this.getStats(),
     };

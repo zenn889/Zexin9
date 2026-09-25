@@ -1,4 +1,4 @@
-import { ModelFallbackGroup, ProviderConfig, ProviderId } from './types';
+import { CloudflareAccount, ModelFallbackGroup, ProviderConfig, ProviderId } from './types';
 
 export const DEFAULT_PROVIDERS: ProviderConfig[] = [
   {
@@ -278,6 +278,7 @@ export const DEFAULT_FALLBACK_GROUPS: ModelFallbackGroup[] = [
 let runtimeStoredKeys: Record<string, string> = {};
 let runtimeStoredBaseUrls: Record<string, string> = {};
 let runtimeCfAccountId: string = '';
+let runtimeCfAccounts: CloudflareAccount[] = [];
 
 export function setRuntimeStoredKeys(keys: Record<string, string>) {
   runtimeStoredKeys = { ...keys };
@@ -291,6 +292,10 @@ export function setRuntimeCfAccountId(accId: string) {
   runtimeCfAccountId = accId;
 }
 
+export function setRuntimeCfAccounts(accounts: CloudflareAccount[]) {
+  runtimeCfAccounts = Array.isArray(accounts) ? [...accounts] : [];
+}
+
 export function getRuntimeStoredKeys(): Record<string, string> {
   return { ...runtimeStoredKeys };
 }
@@ -302,6 +307,11 @@ export function getRuntimeStoredBaseUrls(): Record<string, string> {
 export function getRuntimeCfAccountId(): string {
   return runtimeCfAccountId;
 }
+
+export function getRuntimeCfAccounts(): CloudflareAccount[] {
+  return [...runtimeCfAccounts];
+}
+
 
 /**
  * Resolve provider API Key from environment, database runtime store, or request headers
@@ -398,4 +408,136 @@ export function getProviderBaseUrl(
 export function getGatewaySecret(): string | undefined {
   return process.env.ROUTER_API_KEY || process.env.GATEWAY_SECRET;
 }
+
+/**
+ * Resolves all configured Cloudflare accounts (from multi-account pool, env, headers, or default single key)
+ * Enables pooling multiple Cloudflare accounts for unlimited free neurons (10,000 neurons/day per account)
+ */
+export function getEffectiveCloudflareAccounts(
+  headerKeys: Record<string, string> = {}
+): CloudflareAccount[] {
+  const accounts: CloudflareAccount[] = [];
+
+  // 1. From client request header if provided (e.g. x-cloudflare-accounts JSON)
+  if (headerKeys['x-cloudflare-accounts']) {
+    try {
+      const parsed = JSON.parse(headerKeys['x-cloudflare-accounts']);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((acc, idx) => {
+          if (acc.accountId && acc.apiToken) {
+            accounts.push({
+              id: acc.id || `cf-hdr-${idx}`,
+              name: acc.name || `Cloudflare #${idx + 1}`,
+              accountId: String(acc.accountId).trim(),
+              apiToken: String(acc.apiToken).trim(),
+              enabled: acc.enabled !== false,
+            });
+          }
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 2. From server runtime pool (saved in Cloud Database / local JSON)
+  if (Array.isArray(runtimeCfAccounts) && runtimeCfAccounts.length > 0) {
+    runtimeCfAccounts.forEach((acc) => {
+      if (
+        acc.accountId &&
+        acc.apiToken &&
+        !accounts.some((a) => a.accountId === acc.accountId.trim())
+      ) {
+        accounts.push({
+          id: acc.id || `cf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: acc.name || 'Cloudflare Account',
+          accountId: acc.accountId.trim(),
+          apiToken: acc.apiToken.trim(),
+          enabled: acc.enabled !== false,
+        });
+      }
+    });
+  }
+
+  // 3. From environment variable CLOUDFLARE_ACCOUNTS (JSON or comma-separated pairs: acc_id_1:token_1,acc_id_2:token_2)
+  const envAccounts = process.env.CLOUDFLARE_ACCOUNTS;
+  if (envAccounts && envAccounts.trim()) {
+    try {
+      if (envAccounts.trim().startsWith('[')) {
+        const parsed = JSON.parse(envAccounts);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((item, idx) => {
+            if (
+              item.accountId &&
+              item.apiToken &&
+              !accounts.some((a) => a.accountId === item.accountId.trim())
+            ) {
+              accounts.push({
+                id: item.id || `cf-env-${idx}`,
+                name: item.name || `Cloudflare Env #${idx + 1}`,
+                accountId: String(item.accountId).trim(),
+                apiToken: String(item.apiToken).trim(),
+                enabled: true,
+              });
+            }
+          });
+        }
+      } else {
+        // Format: "account_id_1:api_token_1,account_id_2:api_token_2"
+        const pairs = envAccounts.split(',');
+        pairs.forEach((pair, idx) => {
+          const parts = pair.split(':');
+          if (parts.length >= 2) {
+            const accId = parts[0].trim();
+            const tok = parts.slice(1).join(':').trim();
+            if (accId && tok && !accounts.some((a) => a.accountId === accId)) {
+              accounts.push({
+                id: `cf-env-pair-${idx}`,
+                name: `Cloudflare Env #${idx + 1}`,
+                accountId: accId,
+                apiToken: tok,
+                enabled: true,
+              });
+            }
+          }
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 4. Fallback to single account if no account in pool yet
+  const singleKey = getProviderApiKey('cloudflare', headerKeys);
+  const singleAccId = getCloudflareAccountId(headerKeys);
+  if (singleKey && singleAccId && !accounts.some((a) => a.accountId === singleAccId.trim())) {
+    accounts.unshift({
+      id: 'cf-default',
+      name: 'Cloudflare Default Account',
+      accountId: singleAccId.trim(),
+      apiToken: singleKey.trim(),
+      enabled: true,
+    });
+  }
+
+  return accounts;
+}
+
+/**
+ * Resolves multiple API keys for any provider (supports comma or newline separated keys)
+ * Enables round-robin and auto-failover across multiple accounts/keys per provider
+ */
+export function getProviderApiKeys(
+  providerId: ProviderId,
+  headerKeys: Record<string, string> = {}
+): string[] {
+  const raw = getProviderApiKey(providerId, headerKeys);
+  if (!raw) return [];
+  const keys = raw
+    .split(/[\n,]/)
+    .map((k) => k.trim())
+    .filter((k) => k.length > 0);
+  return keys.length > 0 ? keys : [raw];
+}
+
 
