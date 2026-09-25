@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
       authRequired: true,
       hasMasterKey,
       isAuthenticated,
+      currentKey: isAuthenticated ? secret : undefined,
     }),
     {
       status: 200,

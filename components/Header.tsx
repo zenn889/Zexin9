@@ -9,6 +9,7 @@ import {
   HardDrive,
   Lock,
   RefreshCw,
+  Shield,
   Terminal,
   Zap,
 } from 'lucide-react';
@@ -19,6 +20,7 @@ interface HeaderProps {
   isOnline: boolean;
   onRefresh: () => void;
   onLogout?: () => void;
+  onOpenSecurity?: () => void;
 }
 
 export function Header({
@@ -27,6 +29,7 @@ export function Header({
   isOnline,
   onRefresh,
   onLogout,
+  onOpenSecurity,
 }: HeaderProps) {
   const [copiedUrl, setCopiedUrl] = useState(false);
 
@@ -99,6 +102,18 @@ export function Header({
         >
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
+
+        {/* Security Settings Button */}
+        {onOpenSecurity && (
+          <button
+            onClick={onOpenSecurity}
+            className="px-2.5 py-1.5 rounded-lg bg-[#21262d] hover:bg-cyan-950/80 hover:border-cyan-800 border border-[#30363d] text-slate-300 hover:text-cyan-300 transition flex items-center space-x-1.5 text-xs font-mono font-semibold"
+            title="Pengaturan Keamanan & Kunci Akses"
+          >
+            <Shield className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">Security Gate</span>
+          </button>
+        )}
 
         {/* Lock Web Button */}
         {onLogout && (

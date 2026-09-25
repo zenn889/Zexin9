@@ -32,6 +32,7 @@ interface SidebarProps {
   setCavemanEnabled: (val: boolean) => void;
   isOnline: boolean;
   onLogout?: () => void;
+  onOpenSecurity?: () => void;
 }
 
 export function Sidebar({
@@ -45,6 +46,7 @@ export function Sidebar({
   setCavemanEnabled,
   isOnline,
   onLogout,
+  onOpenSecurity,
 }: SidebarProps) {
   const [copiedToken, setCopiedToken] = React.useState(false);
 
@@ -206,10 +208,20 @@ export function Sidebar({
         <div className="p-2 rounded-lg bg-[#161b22] border border-[#30363d] font-mono text-xs text-slate-300 truncate">
           {effectiveToken}
         </div>
+        {onOpenSecurity && (
+          <button
+            onClick={onOpenSecurity}
+            className="w-full mt-2.5 py-1.5 px-3 rounded-lg bg-[#21262d] hover:bg-cyan-950/80 hover:border-cyan-800 border border-[#30363d] text-slate-300 hover:text-cyan-300 text-xs font-mono font-semibold flex items-center justify-center space-x-1.5 transition"
+            title="Pengaturan Keamanan & Kunci Akses"
+          >
+            <Shield className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Security Gate Settings</span>
+          </button>
+        )}
         {onLogout && (
           <button
             onClick={onLogout}
-            className="w-full mt-2.5 py-1.5 px-3 rounded-lg bg-[#21262d] hover:bg-rose-950/80 hover:border-rose-800 border border-[#30363d] text-slate-300 hover:text-rose-300 text-xs font-mono font-semibold flex items-center justify-center space-x-1.5 transition"
+            className="w-full mt-2 py-1.5 px-3 rounded-lg bg-[#21262d] hover:bg-rose-950/80 hover:border-rose-800 border border-[#30363d] text-slate-300 hover:text-rose-300 text-xs font-mono font-semibold flex items-center justify-center space-x-1.5 transition"
             title="Kunci Dashboard Web"
           >
             <Lock className="w-3.5 h-3.5 text-rose-400" />

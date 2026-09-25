@@ -9,6 +9,7 @@ import { PlaygroundTab } from '@/components/PlaygroundTab';
 import { IntegrationsTab } from '@/components/IntegrationsTab';
 import { DeployTab } from '@/components/DeployTab';
 import { LoginModal } from '@/components/LoginModal';
+import { SecurityModal } from '@/components/SecurityModal';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -25,6 +26,7 @@ export default function Home() {
   const [authChecking, setAuthChecking] = useState(true);
   const [hasMasterKey, setHasMasterKey] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -155,6 +157,7 @@ export default function Home() {
         setCavemanEnabled={handleCavemanToggle}
         isOnline={isGatewayOnline}
         onLogout={handleLogout}
+        onOpenSecurity={() => setIsSecurityModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -166,6 +169,7 @@ export default function Home() {
           isOnline={isGatewayOnline}
           onRefresh={checkAuthAndStatus}
           onLogout={handleLogout}
+          onOpenSecurity={() => setIsSecurityModalOpen(true)}
         />
 
         {/* Dynamic Tab Body */}
@@ -208,6 +212,16 @@ export default function Home() {
           {activeTab === 'deploy' && <DeployTab />}
         </main>
       </div>
+
+      {/* Dedicated Security Settings Modal */}
+      <SecurityModal
+        isOpen={isSecurityModalOpen}
+        onClose={() => {
+          setIsSecurityModalOpen(false);
+          checkAuthAndStatus();
+        }}
+        onLogout={handleLogout}
+      />
     </div>
   );
 }
