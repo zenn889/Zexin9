@@ -5,6 +5,7 @@ import {
   Check,
   CheckCircle2,
   Copy,
+  Cpu,
   Eye,
   EyeOff,
   Globe,
@@ -12,6 +13,8 @@ import {
   Play,
   RefreshCw,
   Shield,
+  Sliders,
+  Sparkles,
   Zap,
   XCircle,
 } from 'lucide-react';
@@ -112,6 +115,8 @@ export function ProvidersTab({
 }: ProvidersTabProps) {
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
   const [cfAccountId, setCfAccountId] = useState('');
+  const [selectedModels, setSelectedModels] = useState<Record<string, string>>({});
+  const [customModelInputs, setCustomModelInputs] = useState<Record<string, string>>({});
   const [pingResults, setPingResults] = useState<
     Record<
       string,
@@ -124,6 +129,12 @@ export function ProvidersTab({
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('9router_cf_account_id');
       if (stored) setCfAccountId(stored);
+
+      const storedModels = localStorage.getItem('9router_selected_models');
+      if (storedModels) setSelectedModels(JSON.parse(storedModels));
+
+      const storedCustom = localStorage.getItem('9router_custom_models');
+      if (storedCustom) setCustomModelInputs(JSON.parse(storedCustom));
     }
   }, []);
 
@@ -132,6 +143,26 @@ export function ProvidersTab({
     if (typeof window !== 'undefined') {
       localStorage.setItem('9router_cf_account_id', val);
     }
+  };
+
+  const handleModelSelect = (providerId: string, model: string) => {
+    setSelectedModels((prev) => {
+      const updated = { ...prev, [providerId]: model };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('9router_selected_models', JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
+
+  const handleCustomModelInputChange = (providerId: string, model: string) => {
+    setCustomModelInputs((prev) => {
+      const updated = { ...prev, [providerId]: model };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('9router_custom_models', JSON.stringify(updated));
+      }
+      return updated;
+    });
   };
 
   const toggleShowKey = (id: string) => {
@@ -165,11 +196,21 @@ export function ProvidersTab({
     }
   };
 
+  const getEffectiveModel = (providerId: string) => {
+    const sel = selectedModels[providerId];
+    if (sel === 'custom') {
+      return customModelInputs[providerId] || '';
+    }
+    return sel || DEFAULT_PROVIDERS.find((p) => p.id === providerId)?.models[0] || '';
+  };
+
   const testProviderPing = async (providerId: ProviderId) => {
     setPingResults((prev) => ({
       ...prev,
       [providerId]: { loading: true },
     }));
+
+    const modelToTest = getEffectiveModel(providerId);
 
     try {
       const res = await fetch('/api/test-provider', {
@@ -180,6 +221,7 @@ export function ProvidersTab({
           apiKey: keys[providerId] || undefined,
           baseUrl: baseUrls[providerId] || undefined,
           accountId: providerId === 'cloudflare' ? cfAccountId : undefined,
+          model: modelToTest || undefined,
         }),
       });
 
@@ -258,10 +300,10 @@ export function ProvidersTab({
         <div>
           <h2 className="text-base font-bold text-white flex items-center space-x-2">
             <Key className="w-4 h-4 text-cyan-400" />
-            <span>3-Tier Provider Pool & API Keys (13+ Providers Supported)</span>
+            <span>3-Tier Provider Pool & Model Selector (13+ Providers)</span>
           </h2>
           <p className="text-xs text-slate-400">
-            Keys are saved in your local browser and automatically forwarded when calling the proxy.
+            Pilih model spesifik untuk masing-masing provider (misal: DeepSeek Chat vs Reasoner, GPT-4o vs o3-mini).
           </p>
         </div>
 
@@ -346,6 +388,8 @@ export function ProvidersTab({
                 const currentKey = keys[provider.id] || '';
                 const hasKey = Boolean(currentKey || isConfiguredEnv);
                 const ping = pingResults[provider.id];
+                const activeModel = getEffectiveModel(provider.id);
+                const isCustomSelected = selectedModels[provider.id] === 'custom';
 
                 return (
                   <div
@@ -391,6 +435,7 @@ export function ProvidersTab({
 
                     {/* Inputs */}
                     <div className="space-y-2.5">
+                      {/* API Key */}
                       <div>
                         <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 mb-1">
                           <span>
@@ -443,13 +488,51 @@ export function ProvidersTab({
                         </div>
                       )}
 
+                      {/* MODEL SELECTOR (New Feature: Choose model per provider!) */}
+                      <div className="p-2.5 rounded-lg bg-[#0d1117] border border-[#30363d] space-y-2">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-semibold text-slate-300 flex items-center space-x-1">
+                            <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>Pilih Model {provider.name}:</span>
+                          </span>
+                          <span className="font-mono text-[10px] text-cyan-300 bg-[#161b22] px-1.5 py-0.2 rounded border border-[#30363d] truncate max-w-[150px]">
+                            {activeModel || 'default'}
+                          </span>
+                        </div>
+
+                        {/* Model Dropdown */}
+                        <select
+                          value={selectedModels[provider.id] || provider.models[0]}
+                          onChange={(e) => handleModelSelect(provider.id, e.target.value)}
+                          className="w-full bg-[#161b22] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 focus:outline-none"
+                        >
+                          {provider.models.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                          <option value="custom">✏️ + Ketik Custom Model ID...</option>
+                        </select>
+
+                        {/* If custom is selected, show manual model input */}
+                        {isCustomSelected && (
+                          <input
+                            type="text"
+                            placeholder="Ketik nama model (misal: deepseek-coder-v2, gpt-4.5)..."
+                            value={customModelInputs[provider.id] || ''}
+                            onChange={(e) => handleCustomModelInputChange(provider.id, e.target.value)}
+                            className="w-full bg-[#161b22] border border-cyan-500/60 rounded-lg px-2.5 py-1.5 text-xs font-mono text-cyan-200 placeholder-slate-600 focus:outline-none"
+                          />
+                        )}
+                      </div>
+
                       {/* Ping Footer */}
                       <div className="flex items-center justify-between pt-2 border-t border-[#30363d]/60 text-xs">
                         <div className="font-mono text-[11px]">
                           {ping?.loading && (
                             <span className="text-cyan-400 flex items-center space-x-1">
                               <RefreshCw className="w-3 h-3 animate-spin" />
-                              <span>Pinging...</span>
+                              <span>Testing {activeModel}...</span>
                             </span>
                           )}
                           {ping && !ping.loading && ping.success && (
@@ -472,7 +555,7 @@ export function ProvidersTab({
                           className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-[#21262d] hover:bg-[#30363d] disabled:opacity-40 text-xs font-semibold text-slate-200 transition"
                         >
                           <Play className="w-3 h-3 text-cyan-400 fill-current" />
-                          <span>Test Ping</span>
+                          <span>Test Model</span>
                         </button>
                       </div>
                     </div>

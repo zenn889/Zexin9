@@ -247,23 +247,34 @@ export function PlaygroundTab({
             onChange={(e) => setSelectedModel(e.target.value)}
             className="bg-slate-950 border border-slate-700/80 text-cyan-300 font-mono text-xs font-bold rounded-xl px-3.5 py-2 focus:outline-none focus:border-cyan-500 shadow-inner"
           >
-            <optgroup label="⭐ Virtual Fallback Groups (Recommended)">
+            <optgroup label="⭐ Virtual Multi-Tier Groups (Auto-Failover)">
               {DEFAULT_FALLBACK_GROUPS.map((g) => (
                 <option key={g.id} value={g.id}>
-                  {g.id} ({g.name})
+                  {g.id} - {g.name}
                 </option>
               ))}
             </optgroup>
-            <optgroup label="Direct Provider Models">
-              {DEFAULT_PROVIDERS.flatMap((p) =>
-                p.models.map((m) => (
+            {DEFAULT_PROVIDERS.map((p) => (
+              <optgroup key={p.id} label={`🔹 ${p.name}`}>
+                {p.models.map((m) => (
                   <option key={`${p.id}-${m}`} value={m}>
-                    {p.name}: {m}
+                    {m}
                   </option>
-                ))
-              )}
+                ))}
+              </optgroup>
+            ))}
+            <optgroup label="✏️ Custom">
+              <option value="custom">+ Ketik Custom Model Manual</option>
             </optgroup>
           </select>
+          {selectedModel === 'custom' && (
+            <input
+              type="text"
+              placeholder="Ketik model ID (misal: deepseek-coder, gpt-4.5)..."
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="bg-slate-950 border border-cyan-500 rounded-xl px-3 py-1.5 text-xs font-mono text-cyan-200 focus:outline-none"
+            />
+          )}
         </div>
 
         {/* Feature Switches */}

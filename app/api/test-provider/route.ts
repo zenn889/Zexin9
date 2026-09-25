@@ -22,7 +22,7 @@ const TEST_MODELS: Record<ProviderId, string> = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { provider, apiKey, baseUrl, accountId } = await req.json();
+    const { provider, apiKey, baseUrl, accountId, model } = await req.json();
 
     if (!provider) {
       return new Response(JSON.stringify({ success: false, error: 'Provider is required' }), {
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const testModel = TEST_MODELS[provider as ProviderId] || 'gpt-4o-mini';
+    const testModel = model || TEST_MODELS[provider as ProviderId] || 'gpt-4o-mini';
     const testRequest: ChatCompletionRequest = {
       model: testModel,
       messages: [{ role: 'user', content: 'Ping' }],
