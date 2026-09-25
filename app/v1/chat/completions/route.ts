@@ -29,10 +29,10 @@ export async function POST(req: NextRequest) {
     const xApiKey = req.headers.get('x-api-key') || '';
     let clientToken = authHeader.replace(/^Bearer\s+/i, '').trim() || xApiKey.trim();
 
-    // Support browser session cookie so web Playground is always authenticated
+    // Support browser auth cookie so web Playground is always authenticated
     if (!clientToken) {
       const cookieHeader = req.headers.get('cookie') || '';
-      const match = cookieHeader.match(/9router_session=([^;]+)/);
+      const match = cookieHeader.match(/(?:9router_auth|9router_session)=([^;]+)/);
       if (match) {
         clientToken = decodeURIComponent(match[1]).trim();
       }

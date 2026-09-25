@@ -114,16 +114,24 @@ function loadData() {
       }
       if (parsed.providerKeys && typeof parsed.providerKeys === 'object') {
         memoryProviderKeys = parsed.providerKeys;
-        setRuntimeStoredKeys(memoryProviderKeys);
+      } else {
+        memoryProviderKeys = {};
       }
+      setRuntimeStoredKeys(memoryProviderKeys);
+
       if (parsed.providerBaseUrls && typeof parsed.providerBaseUrls === 'object') {
         memoryProviderBaseUrls = parsed.providerBaseUrls;
-        setRuntimeStoredBaseUrls(memoryProviderBaseUrls);
+      } else {
+        memoryProviderBaseUrls = {};
       }
+      setRuntimeStoredBaseUrls(memoryProviderBaseUrls);
+
       if (typeof parsed.cfAccountId === 'string') {
         memoryCfAccountId = parsed.cfAccountId;
-        setRuntimeCfAccountId(memoryCfAccountId);
+      } else {
+        memoryCfAccountId = '';
       }
+      setRuntimeCfAccountId(memoryCfAccountId);
     }
   } catch {
     // ignore read error, fallback to memory

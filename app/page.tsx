@@ -64,6 +64,12 @@ export default function Home() {
         const authData = await authRes.json();
         setHasMasterKey(Boolean(authData.hasMasterKey));
         setIsAuthenticated(Boolean(authData.isAuthenticated));
+        if (authData.currentKey) {
+          setGatewaySecret(authData.currentKey);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('9router_gateway_secret', authData.currentKey);
+          }
+        }
       }
 
       // Check gateway status

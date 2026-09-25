@@ -280,11 +280,11 @@ let runtimeStoredBaseUrls: Record<string, string> = {};
 let runtimeCfAccountId: string = '';
 
 export function setRuntimeStoredKeys(keys: Record<string, string>) {
-  runtimeStoredKeys = { ...runtimeStoredKeys, ...keys };
+  runtimeStoredKeys = { ...keys };
 }
 
 export function setRuntimeStoredBaseUrls(urls: Record<string, string>) {
-  runtimeStoredBaseUrls = { ...runtimeStoredBaseUrls, ...urls };
+  runtimeStoredBaseUrls = { ...urls };
 }
 
 export function setRuntimeCfAccountId(accId: string) {
