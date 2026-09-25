@@ -8,9 +8,17 @@ import {
   getProviderApiKeys,
   getProviderBaseUrl,
   getEffectiveCloudflareAccounts,
+  getEffectiveProviderAccounts,
+  getCloudflareAccountId,
 } from './config';
 import { optimizeMessages } from './optimizer';
-import { ChatCompletionRequest, ChatMessage, ProviderId, CloudflareAccount } from './types';
+import {
+  ChatCompletionRequest,
+  ChatMessage,
+  ProviderId,
+  CloudflareAccount,
+  ProviderAccount,
+} from './types';
 
 export interface RouteCandidate {
   provider: ProviderId;
@@ -24,6 +32,7 @@ export interface RouterExecutionResult {
   fallbackCount: number;
   tokensSaved: number;
   cfAccountUsed?: string;
+  accountUsed?: string;
 }
 
 /**
@@ -248,14 +257,13 @@ export function resolveCandidates(
     candidates.push({ provider: 'groq', model: 'llama-3.3-70b-versatile' });
   }
 
-  // 3. Multi-Provider Pool Inclusion: Append ANY provider configured by the user that has a key
+  // 3. Multi-Provider Pool Inclusion: Append ANY provider configured by the user that has accounts or a key
   for (const prov of DEFAULT_PROVIDERS) {
     if (!candidates.some((c) => c.provider === prov.id)) {
+      const accounts = getEffectiveProviderAccounts(prov.id, headerKeys);
       const hasKey =
-        prov.id === 'cloudflare'
-          ? getEffectiveCloudflareAccounts(headerKeys).some((a) => a.enabled !== false) ||
-            Boolean(getProviderApiKey('cloudflare', headerKeys))
-          : Boolean(getProviderApiKey(prov.id, headerKeys));
+        accounts.some((a) => a.enabled !== false) ||
+        Boolean(getProviderApiKey(prov.id, headerKeys));
       if (hasKey) {
         candidates.push({ provider: prov.id, model: prov.models[0] });
       }
@@ -265,32 +273,37 @@ export function resolveCandidates(
   return candidates;
 }
 
-// Global round-robin pointer for Cloudflare accounts pool
-let cfRoundRobinIdx = 0;
+// Global round-robin pointer per provider for multi-account pool load balancing
+const providerRoundRobinIndex: Record<string, number> = {};
 
 /**
- * Executes a call across the pooled Cloudflare accounts.
- * Automatically round-robins requests and fails over to the next account
- * if an account reaches its 10,000 neurons/day quota (HTTP 429) or errors out.
+ * Universal 9Router-style multi-account pool execution engine.
+ * Automatically round-robins across all connected accounts for a provider
+ * and immediately fails over to the next account if one hits a rate limit (429),
+ * quota exhaustion, or balance depletion (401/402).
  */
-export async function executeCloudflarePoolCall(
+export async function executeProviderAccountPoolCall(
+  provider: ProviderId,
   model: string,
   request: ChatCompletionRequest,
   headerKeys: Record<string, string> = {}
-): Promise<{ response: Response; accountUsed?: CloudflareAccount; errors: string[] }> {
-  const accounts = getEffectiveCloudflareAccounts(headerKeys).filter((a) => a.enabled !== false);
+): Promise<{ response: Response; accountUsed?: ProviderAccount; errors: string[] }> {
+  // Get all active accounts for this provider
+  const accounts = getEffectiveProviderAccounts(provider, headerKeys).filter(
+    (a) => a.enabled !== false
+  );
 
-  if (accounts.length === 0) {
+  if (accounts.length === 0 && provider !== 'custom') {
     return {
       response: new Response(
-        JSON.stringify({ error: 'Tidak ada akun Cloudflare yang terkonfigurasi atau aktif.' }),
+        JSON.stringify({ error: `Tidak ada akun atau API key yang aktif untuk provider: ${provider}` }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
       ),
-      errors: ['Tidak ada akun Cloudflare yang aktif di pool.'],
+      errors: [`Provider ${provider} tidak memiliki akun aktif`],
     };
   }
 
-  const targetModel = normalizeModelForProvider('cloudflare', model);
+  const targetModel = normalizeModelForProvider(provider, model);
   const sanitizedMessages = sanitizeMessages(request.messages);
   const reqWithTargetModel: ChatCompletionRequest = {
     ...request,
@@ -298,64 +311,108 @@ export async function executeCloudflarePoolCall(
     messages: sanitizedMessages,
   };
 
-  const startIdx = cfRoundRobinIdx % accounts.length;
-  cfRoundRobinIdx++;
+  // If custom provider with no specific accounts, use custom base url
+  if (accounts.length === 0 && provider === 'custom') {
+    const customUrl = getProviderBaseUrl('custom', headerKeys);
+    const res = await callOpenAICompatible(customUrl, '', reqWithTargetModel);
+    return { response: res, errors: [] };
+  }
+
+  const currentIdx = providerRoundRobinIndex[provider] || 0;
+  providerRoundRobinIndex[provider] = currentIdx + 1;
+  const startIdx = currentIdx % accounts.length;
 
   let lastResponse: Response | null = null;
-  const cfErrors: string[] = [];
+  const poolErrors: string[] = [];
 
   for (let offset = 0; offset < accounts.length; offset++) {
     const account = accounts[(startIdx + offset) % accounts.length];
-    const baseUrl = `https://api.cloudflare.com/client/v4/accounts/${account.accountId.trim()}/ai/v1`;
+
+    // Determine effective Base URL for this specific account
+    let baseUrl = account.baseUrl;
+    if (!baseUrl) {
+      if (provider === 'cloudflare') {
+        const accId = account.accountId || getCloudflareAccountId(headerKeys);
+        baseUrl = `https://api.cloudflare.com/client/v4/accounts/${accId}/ai/v1`;
+      } else {
+        baseUrl = getProviderBaseUrl(provider, headerKeys);
+      }
+    }
 
     try {
-      const res = await callOpenAICompatible(baseUrl, account.apiToken.trim(), reqWithTargetModel);
-      if (res.ok) {
-        account.lastUsedAt = new Date().toISOString();
-        return { response: res, accountUsed: account, errors: cfErrors };
+      let res: Response;
+      if (provider === 'anthropic') {
+        res = await callAnthropic(baseUrl, account.apiKey, reqWithTargetModel);
+      } else if (provider === 'gemini') {
+        res = await callGemini(baseUrl, account.apiKey, reqWithTargetModel);
+      } else {
+        res = await callOpenAICompatible(baseUrl, account.apiKey, reqWithTargetModel);
       }
 
-      // If failed (e.g. 429 Quota Exceeded / Rate Limit, 401, 403, 500)
+      if (res.ok) {
+        account.lastUsedAt = new Date().toISOString();
+        account.lastStatus = 'ok';
+        return { response: res, accountUsed: account, errors: poolErrors };
+      }
+
+      // If failed (429 Rate Limit / Quota, 401 Auth, 402 Insufficient Balance, 403, 500)
       const errorText = await res.clone().text().catch(() => '');
       let parsedMsg = errorText.slice(0, 150);
       try {
         const parsed = JSON.parse(errorText);
-        if (parsed?.errors?.[0]?.message) {
-          parsedMsg = parsed.errors[0].message;
-        } else if (parsed?.error?.message) {
+        if (parsed?.error?.message) {
           parsedMsg = parsed.error.message;
+        } else if (parsed?.message) {
+          parsedMsg = parsed.message;
+        } else if (parsed?.errors?.[0]?.message) {
+          parsedMsg = parsed.errors[0].message;
         }
       } catch {}
 
-      const logMsg = `Akun "${account.name}" (${account.accountId.slice(0, 6)}...): Status ${res.status} - ${parsedMsg}`;
-      cfErrors.push(logMsg);
+      account.lastStatus = res.status === 429 ? 'rate_limited' : 'error';
+      account.lastError = parsedMsg;
+
+      const logMsg = `Akun "${account.name}" (${account.apiKey ? account.apiKey.slice(0, 6) + '...' : ''}): Status ${res.status} - ${parsedMsg}`;
+      poolErrors.push(logMsg);
       lastResponse = res;
-      // Continue loop to failover automatically to the next Cloudflare account!
+      // Auto-failover immediately to the next account in this provider's pool!
     } catch (err: any) {
-      cfErrors.push(`Akun "${account.name}": Network Error - ${err.message || err}`);
+      account.lastStatus = 'error';
+      account.lastError = err.message || 'Network Error';
+      poolErrors.push(`Akun "${account.name}": Network Error - ${err.message || err}`);
     }
   }
 
-  // If all accounts in pool failed:
   return {
     response:
       lastResponse ||
       new Response(
         JSON.stringify({
           error: {
-            message: `Semua (${accounts.length}) akun Cloudflare di pool gagal memproses request.`,
-            details: cfErrors,
+            message: `Semua (${accounts.length}) akun untuk ${provider} gagal memproses request.`,
+            details: poolErrors,
           },
         }),
         { status: 429, headers: { 'Content-Type': 'application/json' } }
       ),
-    errors: cfErrors,
+    errors: poolErrors,
   };
 }
 
 /**
+ * Cloudflare pool helper for backwards compatibility
+ */
+export async function executeCloudflarePoolCall(
+  model: string,
+  request: ChatCompletionRequest,
+  headerKeys: Record<string, string> = {}
+): Promise<{ response: Response; accountUsed?: ProviderAccount; errors: string[] }> {
+  return await executeProviderAccountPoolCall('cloudflare', model, request, headerKeys);
+}
+
+/**
  * Dispatch chat completion request to a specific provider.
- * Supports multi-key rotation and failover for providers configured with multiple keys.
+ * Supports multi-account rotation and failover for all providers.
  */
 export async function executeProviderCall(
   provider: ProviderId,
@@ -363,71 +420,8 @@ export async function executeProviderCall(
   request: ChatCompletionRequest,
   headerKeys: Record<string, string> = {}
 ): Promise<Response> {
-  const apiKeys = getProviderApiKeys(provider, headerKeys);
-  const baseUrl = getProviderBaseUrl(provider, headerKeys);
-
-  if (apiKeys.length === 0 && provider !== 'custom') {
-    return new Response(
-      JSON.stringify({ error: `API key not configured for provider: ${provider}` }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  // Normalize model ID for the specific provider and sanitize messages
-  const targetModel = normalizeModelForProvider(provider, model);
-  const sanitizedMessages = sanitizeMessages(request.messages);
-
-  const reqWithTargetModel: ChatCompletionRequest = {
-    ...request,
-    model: targetModel,
-    messages: sanitizedMessages,
-  };
-
-  const callWithKey = async (apiKey: string) => {
-    switch (provider) {
-      case 'anthropic':
-        return await callAnthropic(baseUrl, apiKey, reqWithTargetModel);
-      case 'gemini':
-        return await callGemini(baseUrl, apiKey, reqWithTargetModel);
-      case 'openai':
-      case 'deepseek':
-      case 'groq':
-      case 'openrouter':
-      case 'mistral':
-      case 'together':
-      case 'cloudflare':
-      case 'cerebras':
-      case 'siliconflow':
-      case 'perplexity':
-      case 'custom':
-      default:
-        return await callOpenAICompatible(baseUrl, apiKey, reqWithTargetModel);
-    }
-  };
-
-  // If multiple keys configured, try each on rate limit (429) or auth error (401/403)
-  let lastRes: Response | null = null;
-  for (let i = 0; i < apiKeys.length; i++) {
-    const key = apiKeys[i];
-    try {
-      const res = await callWithKey(key);
-      if (res.ok) {
-        return res;
-      }
-      lastRes = res;
-      if ((res.status === 429 || res.status === 401 || res.status === 403) && i < apiKeys.length - 1) {
-        continue;
-      }
-      return res;
-    } catch (e) {
-      if (i === apiKeys.length - 1) throw e;
-    }
-  }
-
-  return (
-    lastRes ||
-    new Response(JSON.stringify({ error: 'No response from provider' }), { status: 500 })
-  );
+  const result = await executeProviderAccountPoolCall(provider, model, request, headerKeys);
+  return result.response;
 }
 
 /**
@@ -457,15 +451,14 @@ export async function routeChatCompletion(
 
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
-    const isCloudflare = candidate.provider === 'cloudflare';
-    const cfAccounts = isCloudflare
-      ? getEffectiveCloudflareAccounts(headerKeys).filter((a) => a.enabled !== false)
-      : [];
+    const accounts = getEffectiveProviderAccounts(candidate.provider, headerKeys).filter(
+      (a) => a.enabled !== false
+    );
     const apiKey = getProviderApiKey(candidate.provider, headerKeys);
 
-    // Skip candidate if no API key is available (and no active CF accounts if cloudflare)
-    if (!apiKey && (!isCloudflare || cfAccounts.length === 0) && candidate.provider !== 'custom') {
-      failureLogs.push(`[${candidate.provider}/${candidate.model}]: Dilewati (API key / akun belum diisi)`);
+    // Skip candidate if no active account or API key is available
+    if (accounts.length === 0 && !apiKey && candidate.provider !== 'custom') {
+      failureLogs.push(`[${candidate.provider}/${candidate.model}]: Dilewati (Belum ada akun/key)`);
       continue;
     }
 
@@ -474,26 +467,21 @@ export async function routeChatCompletion(
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      let res: Response;
-      let cfAccountUsedName: string | undefined;
-
-      if (isCloudflare && cfAccounts.length > 0) {
-        // Multi-Account Cloudflare Pool execution with automatic quota failover
-        const cfResult = await executeCloudflarePoolCall(candidate.model, request, headerKeys);
-        res = cfResult.response;
-        cfAccountUsedName = cfResult.accountUsed?.name;
-        if (cfResult.errors.length > 0) {
-          failureLogs.push(...cfResult.errors.map((e) => `[cloudflare pool]: ${e}`));
-        }
-      } else {
-        res = await executeProviderCall(
-          candidate.provider,
-          candidate.model,
-          request,
-          headerKeys
-        );
-      }
+      // Execute across the provider's multi-account pool with automatic account failover
+      const poolResult = await executeProviderAccountPoolCall(
+        candidate.provider,
+        candidate.model,
+        request,
+        headerKeys
+      );
       clearTimeout(timeoutId);
+
+      const res = poolResult.response;
+      const accountUsed = poolResult.accountUsed;
+
+      if (poolResult.errors.length > 0) {
+        failureLogs.push(...poolResult.errors.map((e) => `[${candidate.provider} pool]: ${e}`));
+      }
 
       // If success, return response immediately!
       if (res.ok) {
@@ -503,7 +491,8 @@ export async function routeChatCompletion(
           servedModel: normalizeModelForProvider(candidate.provider, candidate.model),
           fallbackCount,
           tokensSaved,
-          cfAccountUsed: cfAccountUsedName,
+          accountUsed: accountUsed?.name,
+          cfAccountUsed: candidate.provider === 'cloudflare' ? accountUsed?.name : undefined,
         };
       }
 

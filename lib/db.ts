@@ -7,8 +7,9 @@ import {
   setRuntimeStoredBaseUrls,
   setRuntimeCfAccountId,
   setRuntimeCfAccounts,
+  setRuntimeProviderAccounts,
 } from './config';
-import { CloudflareAccount } from './types';
+import { CloudflareAccount, ProviderAccount } from './types';
 
 export interface RequestLog {
   id: string;
@@ -52,6 +53,7 @@ let memoryProviderKeys: Record<string, string> = {};
 let memoryProviderBaseUrls: Record<string, string> = {};
 let memoryCfAccountId: string = '';
 let memoryCfAccounts: CloudflareAccount[] = [];
+let memoryProviderAccounts: ProviderAccount[] = [];
 
 // Runtime DB configuration
 let runtimeDbConfig: DbConfig = {};
@@ -147,6 +149,13 @@ function loadData() {
         memoryCfAccounts = [];
       }
       setRuntimeCfAccounts(memoryCfAccounts);
+
+      if (Array.isArray(parsed.providerAccounts)) {
+        memoryProviderAccounts = parsed.providerAccounts;
+      } else {
+        memoryProviderAccounts = [];
+      }
+      setRuntimeProviderAccounts(memoryProviderAccounts);
     }
   } catch {
 
@@ -245,6 +254,7 @@ async function persistToCloud(data: {
   providerBaseUrls: Record<string, string>;
   cfAccountId: string;
   cfAccounts: CloudflareAccount[];
+  providerAccounts: ProviderAccount[];
 }) {
   // 1. MongoDB
   const mongoUri = getEffectiveMongoUri();
@@ -264,6 +274,7 @@ async function persistToCloud(data: {
               providerBaseUrls: data.providerBaseUrls,
               cfAccountId: data.cfAccountId,
               cfAccounts: data.cfAccounts,
+              providerAccounts: data.providerAccounts,
               updatedAt: new Date().toISOString(),
             },
           },
@@ -290,6 +301,7 @@ async function persistToCloud(data: {
           providerBaseUrls: data.providerBaseUrls,
           cfAccountId: data.cfAccountId,
           cfAccounts: data.cfAccounts,
+          providerAccounts: data.providerAccounts,
         },
         updated_at: new Date().toISOString(),
       });
@@ -326,6 +338,7 @@ function persistData() {
     providerBaseUrls: memoryProviderBaseUrls,
     cfAccountId: memoryCfAccountId,
     cfAccounts: memoryCfAccounts,
+    providerAccounts: memoryProviderAccounts,
   };
 
 
@@ -494,6 +507,10 @@ export const db = {
               memoryCfAccounts = doc.cfAccounts;
               setRuntimeCfAccounts(memoryCfAccounts);
             }
+            if (Array.isArray(doc.providerAccounts)) {
+              memoryProviderAccounts = doc.providerAccounts;
+              setRuntimeProviderAccounts(memoryProviderAccounts);
+            }
             syncedSource = 'mongodb';
             // update local cache file
             const filePath = getDataFilePath();
@@ -507,6 +524,7 @@ export const db = {
                 providerBaseUrls: memoryProviderBaseUrls,
                 cfAccountId: memoryCfAccountId,
                 cfAccounts: memoryCfAccounts,
+                providerAccounts: memoryProviderAccounts,
               }),
               'utf-8'
             );
@@ -557,6 +575,10 @@ export const db = {
             memoryCfAccounts = state.cfAccounts;
             setRuntimeCfAccounts(memoryCfAccounts);
           }
+          if (Array.isArray(state.providerAccounts)) {
+            memoryProviderAccounts = state.providerAccounts;
+            setRuntimeProviderAccounts(memoryProviderAccounts);
+          }
           syncedSource = 'supabase';
           const filePath = getDataFilePath();
           fs.writeFileSync(
@@ -569,6 +591,7 @@ export const db = {
               providerBaseUrls: memoryProviderBaseUrls,
               cfAccountId: memoryCfAccountId,
               cfAccounts: memoryCfAccounts,
+              providerAccounts: memoryProviderAccounts,
             }),
             'utf-8'
           );
@@ -765,7 +788,7 @@ export const db = {
     persistData();
   },
 
-  // --- Provider Keys Management (Multi-Provider Cloud Storage) ---
+  // --- Provider Keys & Multi-Account Management (9Router-style Cloud Storage) ---
   getProviderSettings() {
     loadData();
     return {
@@ -773,6 +796,7 @@ export const db = {
       baseUrls: { ...memoryProviderBaseUrls },
       cfAccountId: memoryCfAccountId,
       cfAccounts: [...memoryCfAccounts],
+      providerAccounts: [...memoryProviderAccounts],
     };
   },
 
@@ -780,7 +804,8 @@ export const db = {
     keys: Record<string, string>,
     baseUrls: Record<string, string> = {},
     cfAccountId: string = '',
-    cfAccounts?: CloudflareAccount[]
+    cfAccounts?: CloudflareAccount[],
+    providerAccounts?: ProviderAccount[]
   ) {
     loadData();
     // Clean and update keys (only keep non-empty trimmed keys)
@@ -811,6 +836,13 @@ export const db = {
       setRuntimeCfAccounts(memoryCfAccounts);
     }
 
+    if (Array.isArray(providerAccounts)) {
+      memoryProviderAccounts = providerAccounts.filter(
+        (acc) => acc && typeof acc.provider === 'string' && typeof acc.apiKey === 'string'
+      );
+      setRuntimeProviderAccounts(memoryProviderAccounts);
+    }
+
     setRuntimeStoredKeys(memoryProviderKeys);
     setRuntimeStoredBaseUrls(memoryProviderBaseUrls);
     if (memoryCfAccountId) {
@@ -818,6 +850,23 @@ export const db = {
     }
 
     persistData();
+  },
+
+  // Universal 9Router-style Provider Accounts Management
+  getProviderAccounts(): ProviderAccount[] {
+    loadData();
+    return [...memoryProviderAccounts];
+  },
+
+  saveProviderAccounts(accounts: ProviderAccount[]) {
+    loadData();
+    if (Array.isArray(accounts)) {
+      memoryProviderAccounts = accounts.filter(
+        (acc) => acc && typeof acc.provider === 'string' && typeof acc.apiKey === 'string'
+      );
+      setRuntimeProviderAccounts(memoryProviderAccounts);
+      persistData();
+    }
   },
 
   // --- Backup Export ---
@@ -832,6 +881,7 @@ export const db = {
       providerBaseUrls: memoryProviderBaseUrls,
       cfAccountId: memoryCfAccountId,
       cfAccounts: memoryCfAccounts,
+      providerAccounts: memoryProviderAccounts,
       logs: memoryLogs,
       stats: this.getStats(),
     };

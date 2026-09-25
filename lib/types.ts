@@ -80,3 +80,19 @@ export interface CloudflareAccount {
   lastUsedAt?: string;
 }
 
+export interface ProviderAccount {
+  id: string;
+  provider: ProviderId;
+  name: string;
+  apiKey: string;
+  accountId?: string; // For Cloudflare (Account ID)
+  baseUrl?: string;   // For Custom or provider URL override
+  enabled: boolean;
+  priority?: number;
+  createdAt?: string;
+  lastUsedAt?: string;
+  lastStatus?: 'ok' | 'rate_limited' | 'error';
+  lastError?: string;
+  latencyMs?: number;
+}
+

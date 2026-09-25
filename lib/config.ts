@@ -1,4 +1,4 @@
-import { CloudflareAccount, ModelFallbackGroup, ProviderConfig, ProviderId } from './types';
+import { CloudflareAccount, ModelFallbackGroup, ProviderConfig, ProviderId, ProviderAccount } from './types';
 
 export const DEFAULT_PROVIDERS: ProviderConfig[] = [
   {
@@ -279,6 +279,7 @@ let runtimeStoredKeys: Record<string, string> = {};
 let runtimeStoredBaseUrls: Record<string, string> = {};
 let runtimeCfAccountId: string = '';
 let runtimeCfAccounts: CloudflareAccount[] = [];
+let runtimeProviderAccounts: ProviderAccount[] = [];
 
 export function setRuntimeStoredKeys(keys: Record<string, string>) {
   runtimeStoredKeys = { ...keys };
@@ -296,6 +297,10 @@ export function setRuntimeCfAccounts(accounts: CloudflareAccount[]) {
   runtimeCfAccounts = Array.isArray(accounts) ? [...accounts] : [];
 }
 
+export function setRuntimeProviderAccounts(accounts: ProviderAccount[]) {
+  runtimeProviderAccounts = Array.isArray(accounts) ? [...accounts] : [];
+}
+
 export function getRuntimeStoredKeys(): Record<string, string> {
   return { ...runtimeStoredKeys };
 }
@@ -310,6 +315,10 @@ export function getRuntimeCfAccountId(): string {
 
 export function getRuntimeCfAccounts(): CloudflareAccount[] {
   return [...runtimeCfAccounts];
+}
+
+export function getRuntimeProviderAccounts(): ProviderAccount[] {
+  return [...runtimeProviderAccounts];
 }
 
 
@@ -538,6 +547,120 @@ export function getProviderApiKeys(
     .map((k) => k.trim())
     .filter((k) => k.length > 0);
   return keys.length > 0 ? keys : [raw];
+}
+
+/**
+ * Resolves all configured accounts for a provider (or all providers if providerId is omitted).
+ * Combines:
+ * 1. Dedicated ProviderAccounts (from Cloud DB / local store)
+ * 2. Dedicated Cloudflare pool accounts
+ * 3. Client request headers (e.g. x-provider-accounts)
+ * 4. Multi-key strings (comma/newline separated) from UI or process.env
+ * 5. Single API keys as fallback accounts
+ *
+ * Enables true 9Router-style multi-account pooling and round-robin/failover for ALL providers!
+ */
+export function getEffectiveProviderAccounts(
+  providerId?: ProviderId,
+  headerKeys: Record<string, string> = {}
+): ProviderAccount[] {
+  const accounts: ProviderAccount[] = [];
+
+  // 1. From request header if provided
+  if (headerKeys['x-provider-accounts']) {
+    try {
+      const parsed = JSON.parse(headerKeys['x-provider-accounts']);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((acc: any, idx: number) => {
+          if (acc.provider && acc.apiKey) {
+            accounts.push({
+              id: acc.id || `hdr-acc-${idx}`,
+              provider: acc.provider as ProviderId,
+              name: acc.name || `${acc.provider} #${idx + 1}`,
+              apiKey: String(acc.apiKey).trim(),
+              accountId: acc.accountId ? String(acc.accountId).trim() : undefined,
+              baseUrl: acc.baseUrl ? String(acc.baseUrl).trim() : undefined,
+              enabled: acc.enabled !== false,
+            });
+          }
+        });
+      }
+    } catch {}
+  }
+
+  // 2. From server runtimeProviderAccounts store
+  if (Array.isArray(runtimeProviderAccounts) && runtimeProviderAccounts.length > 0) {
+    runtimeProviderAccounts.forEach((acc) => {
+      if (
+        acc.provider &&
+        acc.apiKey &&
+        !accounts.some((a) => a.id === acc.id || (a.provider === acc.provider && a.apiKey === acc.apiKey))
+      ) {
+        accounts.push({
+          id: acc.id || `acc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          provider: acc.provider,
+          name: acc.name || `${acc.provider} Account`,
+          apiKey: acc.apiKey.trim(),
+          accountId: acc.accountId?.trim(),
+          baseUrl: acc.baseUrl?.trim(),
+          enabled: acc.enabled !== false,
+          priority: acc.priority,
+          createdAt: acc.createdAt,
+          lastUsedAt: acc.lastUsedAt,
+        });
+      }
+    });
+  }
+
+  // 3. For Cloudflare specifically: also merge from getEffectiveCloudflareAccounts
+  if (!providerId || providerId === 'cloudflare') {
+    const cfAccounts = getEffectiveCloudflareAccounts(headerKeys);
+    cfAccounts.forEach((cf) => {
+      if (
+        !accounts.some(
+          (a) =>
+            a.provider === 'cloudflare' &&
+            (a.accountId === cf.accountId || a.apiKey === cf.apiToken)
+        )
+      ) {
+        accounts.push({
+          id: cf.id,
+          provider: 'cloudflare',
+          name: cf.name,
+          apiKey: cf.apiToken,
+          accountId: cf.accountId,
+          enabled: cf.enabled !== false,
+          createdAt: cf.createdAt,
+          lastUsedAt: cf.lastUsedAt,
+        });
+      }
+    });
+  }
+
+  // 4. For every provider: if user supplied keys in single key inputs or comma-separated env vars,
+  // ensure they are available as pooled accounts if not already present
+  const providersToCheck = providerId ? [providerId] : DEFAULT_PROVIDERS.map((p) => p.id);
+  providersToCheck.forEach((p) => {
+    const keys = getProviderApiKeys(p, headerKeys);
+    keys.forEach((key, kIdx) => {
+      if (!accounts.some((a) => a.provider === p && a.apiKey === key)) {
+        accounts.push({
+          id: `auto-${p}-${kIdx}`,
+          provider: p,
+          name: keys.length > 1 ? `${p.toUpperCase()} Key #${kIdx + 1}` : `${p.toUpperCase()} Main`,
+          apiKey: key,
+          accountId: p === 'cloudflare' ? getCloudflareAccountId(headerKeys) : undefined,
+          baseUrl: getProviderBaseUrl(p, headerKeys),
+          enabled: true,
+        });
+      }
+    });
+  });
+
+  if (providerId) {
+    return accounts.filter((a) => a.provider === providerId);
+  }
+  return accounts;
 }
 
 

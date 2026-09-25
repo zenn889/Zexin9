@@ -23,9 +23,12 @@ import {
   Power,
   Server,
   AlertCircle,
+  Users,
+  Tag,
+  CheckCheck,
 } from 'lucide-react';
 import { DEFAULT_PROVIDERS } from '@/lib/config';
-import { ProviderId, CloudflareAccount } from '@/lib/types';
+import { ProviderId, CloudflareAccount, ProviderAccount } from '@/lib/types';
 
 interface ProvidersTabProps {
   keys: Record<string, string>;
@@ -131,6 +134,22 @@ export function ProvidersTab({
   const [accountPingResults, setAccountPingResults] = useState<
     Record<string, { loading?: boolean; success?: boolean; latency?: number; error?: string }>
   >({});
+
+  // 9Router Universal Multi-Account Connections State
+  const [providerAccounts, setProviderAccounts] = useState<ProviderAccount[]>([]);
+  const [isAddingAccount, setIsAddingAccount] = useState(false);
+  const [newAccProvider, setNewAccProvider] = useState<ProviderId>('deepseek');
+  const [newAccName, setNewAccName] = useState('');
+  const [newAccKey, setNewAccKey] = useState('');
+  const [newAccAccountId, setNewAccAccountId] = useState('');
+  const [newAccBaseUrl, setNewAccBaseUrl] = useState('');
+  const [showNewAccKey, setShowNewAccKey] = useState(false);
+  const [selectedFilterProvider, setSelectedFilterProvider] = useState<string>('all');
+  const [testingAccId, setTestingAccId] = useState<string | null>(null);
+  const [accPingResults, setAccPingResults] = useState<
+    Record<string, { loading?: boolean; success?: boolean; latency?: number; error?: string }>
+  >({});
+
   const [selectedModels, setSelectedModels] = useState<Record<string, string>>({});
   const [customModelInputs, setCustomModelInputs] = useState<Record<string, string>>({});
   const [userCustomModels, setUserCustomModels] = useState<Record<string, string[]>>({});
@@ -157,6 +176,18 @@ export function ProvidersTab({
         try {
           const parsed = JSON.parse(storedCfAccounts);
           if (Array.isArray(parsed)) setCfAccounts(parsed);
+        } catch {
+          // ignore
+        }
+      }
+
+      const storedProvAccounts =
+        localStorage.getItem('zexin9_provider_accounts') ||
+        localStorage.getItem('9router_provider_accounts');
+      if (storedProvAccounts) {
+        try {
+          const parsed = JSON.parse(storedProvAccounts);
+          if (Array.isArray(parsed)) setProviderAccounts(parsed);
         } catch {
           // ignore
         }
@@ -194,6 +225,9 @@ export function ProvidersTab({
         if (Array.isArray(data.cfAccounts) && data.cfAccounts.length > 0) {
           setCfAccounts(data.cfAccounts);
         }
+        if (Array.isArray(data.providerAccounts) && data.providerAccounts.length > 0) {
+          setProviderAccounts(data.providerAccounts);
+        }
       })
       .catch(() => {});
   }, []);
@@ -212,6 +246,7 @@ export function ProvidersTab({
         baseUrls,
         cfAccountId,
         cfAccounts: updated,
+        providerAccounts,
       }),
     }).catch(() => {});
   };
@@ -294,6 +329,111 @@ export function ProvidersTab({
     }
   };
 
+  // Universal 9Router Provider Account Handlers
+  const saveProviderAccountsLocalAndSync = (updated: ProviderAccount[]) => {
+    setProviderAccounts(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('zexin9_provider_accounts', JSON.stringify(updated));
+    }
+    fetch('/api/providers/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        keys,
+        baseUrls,
+        cfAccountId,
+        cfAccounts,
+        providerAccounts: updated,
+      }),
+    }).catch(() => {});
+  };
+
+  const handleAddAccount = () => {
+    if (!newAccKey.trim()) return;
+    const providerObj = DEFAULT_PROVIDERS.find((p) => p.id === newAccProvider);
+    const existingCount = providerAccounts.filter((a) => a.provider === newAccProvider).length;
+    const newAcc: ProviderAccount = {
+      id: `acc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      provider: newAccProvider,
+      name:
+        newAccName.trim() ||
+        `${providerObj?.name || newAccProvider} #${existingCount + 1}`,
+      apiKey: newAccKey.trim(),
+      accountId: newAccProvider === 'cloudflare' ? newAccAccountId.trim() : undefined,
+      baseUrl: newAccBaseUrl.trim() || undefined,
+      enabled: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updated = [...providerAccounts, newAcc];
+    saveProviderAccountsLocalAndSync(updated);
+
+    // If single inputs were empty, populate for backward compatibility
+    if (!keys[newAccProvider]) {
+      handleKeyChange(newAccProvider, newAcc.apiKey);
+    }
+    if (newAccProvider === 'cloudflare' && newAcc.accountId && !cfAccountId) {
+      handleCfAccountIdChange(newAcc.accountId);
+    }
+
+    setNewAccName('');
+    setNewAccKey('');
+    setNewAccAccountId('');
+    setNewAccBaseUrl('');
+    setIsAddingAccount(false);
+  };
+
+  const handleToggleAccount = (id: string) => {
+    const updated = providerAccounts.map((acc) =>
+      acc.id === id ? { ...acc, enabled: !acc.enabled } : acc
+    );
+    saveProviderAccountsLocalAndSync(updated);
+  };
+
+  const handleDeleteAccount = (id: string) => {
+    const updated = providerAccounts.filter((acc) => acc.id !== id);
+    saveProviderAccountsLocalAndSync(updated);
+  };
+
+  const handleTestAccount = async (acc: ProviderAccount) => {
+    setAccPingResults((prev) => ({
+      ...prev,
+      [acc.id]: { loading: true },
+    }));
+
+    try {
+      const res = await fetch('/api/test-provider', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: acc.provider,
+          apiKey: acc.apiKey,
+          accountId: acc.accountId,
+          baseUrl: acc.baseUrl,
+        }),
+      });
+      const data = await res.json();
+      setAccPingResults((prev) => ({
+        ...prev,
+        [acc.id]: {
+          loading: false,
+          success: data.success,
+          latency: data.latency,
+          error: data.error,
+        },
+      }));
+    } catch (err: any) {
+      setAccPingResults((prev) => ({
+        ...prev,
+        [acc.id]: {
+          loading: false,
+          success: false,
+          error: err.message || 'Gagal terhubung',
+        },
+      }));
+    }
+  };
+
   const handleSaveAllToCloud = async () => {
     setSavingAllKeys(true);
     setSaveAllMsg(null);
@@ -306,6 +446,7 @@ export function ProvidersTab({
           baseUrls,
           cfAccountId,
           cfAccounts,
+          providerAccounts,
         }),
       });
       const data = await res.json();
@@ -629,6 +770,362 @@ export function ProvidersTab({
         />
       </div>
 
+      {/* 9Router Universal Connections & Multi-Account Manager */}
+      <div className="p-5 rounded-2xl bg-[#090d13] border border-cyan-500/30 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#30363d]/80">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20 shrink-0">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h3 className="text-sm font-bold text-white">
+                  9Router Multi-Account Connections Pool
+                </h3>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-700">
+                  {providerAccounts.filter((a) => a.enabled).length} Akun Aktif
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700">
+                  {new Set(providerAccounts.map((a) => a.provider)).size} Provider Terhubung
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Koneksikan banyak akun/API key untuk DeepSeek, Gemini, Groq, Cloudflare, OpenAI, dll. Rotasi beban otomatis (round-robin) & failover seketika jika ada akun yang limit (429) atau kehabisan saldo!
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={() => setIsAddingAccount(!isAddingAccount)}
+              className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-cyan-500/20 flex items-center space-x-1.5 transition"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Hubungkan Akun Baru</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Filter Pills */}
+        <div className="flex flex-wrap gap-1.5 items-center">
+          <button
+            type="button"
+            onClick={() => setSelectedFilterProvider('all')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition ${
+              selectedFilterProvider === 'all'
+                ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
+                : 'bg-[#161b22] text-slate-400 hover:text-slate-200 border border-[#30363d]'
+            }`}
+          >
+            Semua Akun ({providerAccounts.length})
+          </button>
+          {DEFAULT_PROVIDERS.map((p) => {
+            const count = providerAccounts.filter((a) => a.provider === p.id).length;
+            if (count === 0) return null;
+            const isSelected = selectedFilterProvider === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setSelectedFilterProvider(p.id)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-mono transition flex items-center space-x-1 ${
+                  isSelected
+                    ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
+                    : 'bg-[#161b22] text-slate-400 hover:text-slate-200 border border-[#30363d]'
+                }`}
+              >
+                <span>{p.name.split(' ')[0]}</span>
+                <span className="text-[10px] opacity-75">({count})</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Add Connection Inline Modal / Form */}
+        {isAddingAccount && (
+          <div className="p-4 rounded-xl bg-[#161b22] border border-cyan-500/40 space-y-3.5 animate-in fade-in">
+            <div className="flex items-center justify-between pb-2 border-b border-[#30363d]">
+              <div className="flex items-center space-x-2">
+                <Plus className="w-4 h-4 text-cyan-400" />
+                <span className="text-xs font-bold text-white">Hubungkan Akun / Connection Baru</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddingAccount(false)}
+                className="text-slate-400 hover:text-white text-xs px-2 py-0.5 rounded hover:bg-[#21262d]"
+              >
+                ✕ Tutup
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Select Provider */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                  Pilih Provider AI <span className="text-rose-400">*</span>
+                </label>
+                <select
+                  value={newAccProvider}
+                  onChange={(e) => setNewAccProvider(e.target.value as ProviderId)}
+                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none"
+                >
+                  {DEFAULT_PROVIDERS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Account Label / Name */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                  Label / Nama Akun (misal: "DeepSeek Pribadi 2", "Gemini Backup")
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Akun Utama 1"
+                  value={newAccName}
+                  onChange={(e) => setNewAccName(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                />
+              </div>
+
+              {/* API Key */}
+              <div className="sm:col-span-2">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-semibold text-slate-400">
+                    API Key / Token <span className="text-rose-400">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewAccKey(!showNewAccKey)}
+                    className="text-[10px] text-slate-500 hover:text-slate-300"
+                  >
+                    {showNewAccKey ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                <input
+                  type={showNewAccKey ? 'text' : 'password'}
+                  placeholder="Masukkan API key untuk akun ini"
+                  value={newAccKey}
+                  onChange={(e) => setNewAccKey(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                />
+              </div>
+
+              {/* Cloudflare Account ID (if provider is cloudflare) */}
+              {newAccProvider === 'cloudflare' && (
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                    Cloudflare Account ID (32-karakter hex) <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 8f6b89f3a54b38d9751e1882ff207b1c"
+                    value={newAccAccountId}
+                    onChange={(e) => setNewAccAccountId(e.target.value)}
+                    className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                  />
+                </div>
+              )}
+
+              {/* Custom Base URL (if custom) */}
+              {newAccProvider === 'custom' && (
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                    Endpoint Base URL (Ollama / Localhost / vLLM)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. http://localhost:11434/v1"
+                    value={newAccBaseUrl}
+                    onChange={(e) => setNewAccBaseUrl(e.target.value)}
+                    className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2 border-t border-[#30363d]">
+              <button
+                type="button"
+                onClick={() => setIsAddingAccount(false)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-[#21262d] transition"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={!newAccKey.trim()}
+                onClick={handleAddAccount}
+                className="px-4 py-1.5 rounded-lg text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20 transition disabled:opacity-40"
+              >
+                + Hubungkan Akun
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Connected Accounts Cards List */}
+        <div className="space-y-2.5">
+          {providerAccounts.filter(
+            (a) => selectedFilterProvider === 'all' || a.provider === selectedFilterProvider
+          ).length === 0 ? (
+            <div className="text-center py-6 px-4 rounded-xl border border-dashed border-[#30363d] bg-[#0d1117]">
+              <Users className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              <p className="text-xs text-slate-400 font-medium">
+                Belum ada akun terhubung untuk {selectedFilterProvider === 'all' ? 'kategori ini' : selectedFilterProvider}.
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Klik tombol <strong>+ Hubungkan Akun Baru</strong> di atas untuk menyambungkan akun DeepSeek, Gemini, Groq, atau Cloudflare tambahan milikmu!
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {providerAccounts
+                .filter(
+                  (a) => selectedFilterProvider === 'all' || a.provider === selectedFilterProvider
+                )
+                .map((acc, idx) => {
+                  const meta = PROVIDER_METADATA[acc.provider] || {
+                    color: 'from-slate-600 to-slate-800',
+                    badge: acc.provider,
+                  };
+                  const ping = accPingResults[acc.id];
+                  const isEnabled = acc.enabled !== false;
+
+                  return (
+                    <div
+                      key={acc.id}
+                      className={`p-3 rounded-xl border transition flex flex-col justify-between ${
+                        isEnabled
+                          ? 'bg-[#161b22] border-[#30363d] hover:border-cyan-500/50'
+                          : 'bg-[#0d1117] border-[#21262d] opacity-60'
+                      }`}
+                    >
+                      <div>
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <div
+                              className={`w-6 h-6 rounded-md bg-gradient-to-tr ${meta.color} flex items-center justify-center font-bold text-[10px] text-white uppercase shrink-0`}
+                            >
+                              {acc.provider.slice(0, 2)}
+                            </div>
+                            <span className="text-xs font-bold text-white truncate max-w-[130px]">
+                              {acc.name || `Akun #${idx + 1}`}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center space-x-1">
+                            <span
+                              className={`w-2 h-2 rounded-full ${
+                                isEnabled
+                                  ? acc.lastStatus === 'rate_limited'
+                                    ? 'bg-amber-400 animate-pulse'
+                                    : 'bg-emerald-400 animate-pulse'
+                                  : 'bg-slate-600'
+                              }`}
+                              title={isEnabled ? 'Akun Aktif' : 'Nonaktif'}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleToggleAccount(acc.id)}
+                              className={`text-[10px] font-mono px-1.5 py-0.5 rounded border transition ${
+                                isEnabled
+                                  ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60'
+                                  : 'bg-slate-800 text-slate-400 border-slate-700'
+                              }`}
+                            >
+                              {isEnabled ? 'ON' : 'OFF'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAccount(acc.id)}
+                              className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 rounded transition"
+                              title="Hapus akun"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Details */}
+                        <div className="space-y-1 text-[11px] font-mono text-slate-400 mb-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500">Provider:</span>
+                            <span className="text-cyan-300 uppercase text-[10px]">{acc.provider}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500">API Key:</span>
+                            <span className="truncate max-w-[140px] text-slate-300">
+                              ••••••••{acc.apiKey ? acc.apiKey.slice(-4) : ''}
+                            </span>
+                          </div>
+                          {acc.accountId && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-500">Account ID:</span>
+                              <span className="truncate max-w-[140px] text-slate-300">
+                                {acc.accountId.slice(0, 6)}...{acc.accountId.slice(-4)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Ping Footer & Test */}
+                      <div className="pt-2 border-t border-[#30363d]/60">
+                        {ping && (
+                          <div
+                            className={`mb-2 text-[10px] font-mono p-1 rounded border flex items-center justify-between ${
+                              ping.success
+                                ? 'bg-emerald-950/30 border-emerald-800/50 text-emerald-300'
+                                : 'bg-rose-950/30 border-rose-800/50 text-rose-300'
+                            }`}
+                          >
+                            <span className="truncate max-w-[190px]">
+                              {ping.success
+                                ? `✓ Siap (${ping.latency}ms)`
+                                : `✗ ${ping.error?.slice(0, 30) || 'Error'}`}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-slate-500">
+                            {acc.lastStatus === 'rate_limited' ? (
+                              <span className="text-amber-400">Rate Limited</span>
+                            ) : isEnabled ? (
+                              <span className="text-emerald-400">Siap Routing</span>
+                            ) : (
+                              'Disabled'
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={ping?.loading}
+                            onClick={() => handleTestAccount(acc)}
+                            className="px-2 py-0.5 text-[10px] font-mono rounded bg-[#21262d] hover:bg-[#30363d] text-cyan-300 border border-[#30363d] flex items-center space-x-1 transition disabled:opacity-50"
+                          >
+                            {ping?.loading ? (
+                              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                            ) : (
+                              <Play className="w-2.5 h-2.5" />
+                            )}
+                            <span>Ping</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* 3 Tiers Layout */}
       {tiers.map((tierInfo) => {
         const tierProviders = DEFAULT_PROVIDERS.filter(
@@ -689,6 +1186,26 @@ export function ProvidersTab({
                       </div>
 
                       <div className="flex items-center space-x-1.5">
+                        {providerAccounts.filter((a) => a.provider === provider.id && a.enabled).length > 0 && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-800">
+                            {providerAccounts.filter((a) => a.provider === provider.id && a.enabled).length} Akun
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewAccProvider(provider.id);
+                            setIsAddingAccount(true);
+                            if (typeof window !== 'undefined') {
+                              window.scrollTo({ top: 380, behavior: 'smooth' });
+                            }
+                          }}
+                          className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21262d] hover:bg-cyan-950 hover:text-cyan-300 text-slate-400 border border-[#30363d] transition flex items-center space-x-0.5"
+                          title="Hubungkan akun baru ke provider ini"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                          <span>Akun</span>
+                        </button>
                         {isConfiguredEnv && (
                           <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21262d] text-cyan-300 border border-[#30363d]">
                             ENV
