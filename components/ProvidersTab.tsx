@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Check,
   CheckCircle2,
   Copy,
   Eye,
   EyeOff,
+  Globe,
   Key,
   Play,
   RefreshCw,
@@ -47,6 +48,11 @@ const PROVIDER_METADATA: Record<
     badge: 'DeepSeek V3 & R1',
     tier: 2,
   },
+  siliconflow: {
+    color: 'from-blue-600 to-indigo-600',
+    badge: 'SiliconCloud (V3/R1/Qwen)',
+    tier: 2,
+  },
   mistral: {
     color: 'from-amber-400 to-orange-500',
     badge: 'Codestral & Mistral Large',
@@ -57,19 +63,34 @@ const PROVIDER_METADATA: Record<
     badge: 'Qwen 2.5 Coder',
     tier: 2,
   },
+  perplexity: {
+    color: 'from-teal-500 to-cyan-600',
+    badge: 'Sonar Realtime Search',
+    tier: 2,
+  },
   openrouter: {
     color: 'from-purple-500 to-indigo-600',
     badge: '200+ Unified Models',
     tier: 2,
   },
+  cloudflare: {
+    color: 'from-orange-500 to-amber-600',
+    badge: 'Workers AI (Free Tier 10k neurons)',
+    tier: 3,
+  },
+  cerebras: {
+    color: 'from-purple-500 to-pink-600',
+    badge: '1,800 tok/s LPU (Free Tier)',
+    tier: 3,
+  },
   gemini: {
     color: 'from-sky-400 to-indigo-600',
-    badge: 'Gemini 2.0 Flash (Free)',
+    badge: 'Gemini 2.0 Flash (Free Tier)',
     tier: 3,
   },
   groq: {
     color: 'from-orange-500 to-red-600',
-    badge: '800 tok/s LPU (Free)',
+    badge: '800 tok/s LPU (Free Tier)',
     tier: 3,
   },
   custom: {
@@ -90,6 +111,7 @@ export function ProvidersTab({
   onRefreshStatus,
 }: ProvidersTabProps) {
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [cfAccountId, setCfAccountId] = useState('');
   const [pingResults, setPingResults] = useState<
     Record<
       string,
@@ -97,6 +119,20 @@ export function ProvidersTab({
     >
   >({});
   const [copiedEnv, setCopiedEnv] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('9router_cf_account_id');
+      if (stored) setCfAccountId(stored);
+    }
+  }, []);
+
+  const handleCfAccountIdChange = (val: string) => {
+    setCfAccountId(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('9router_cf_account_id', val);
+    }
+  };
 
   const toggleShowKey = (id: string) => {
     setShowKeys((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -143,6 +179,7 @@ export function ProvidersTab({
           provider: providerId,
           apiKey: keys[providerId] || undefined,
           baseUrl: baseUrls[providerId] || undefined,
+          accountId: providerId === 'cloudflare' ? cfAccountId : undefined,
         }),
       });
 
@@ -180,6 +217,13 @@ export function ProvidersTab({
     if (keys['openrouter']) content += `OPENROUTER_API_KEY="${keys['openrouter']}"\n`;
     if (keys['mistral']) content += `MISTRAL_API_KEY="${keys['mistral']}"\n`;
     if (keys['together']) content += `TOGETHER_API_KEY="${keys['together']}"\n`;
+    if (keys['cloudflare']) {
+      content += `CLOUDFLARE_API_TOKEN="${keys['cloudflare']}"\n`;
+      if (cfAccountId) content += `CLOUDFLARE_ACCOUNT_ID="${cfAccountId}"\n`;
+    }
+    if (keys['cerebras']) content += `CEREBRAS_API_KEY="${keys['cerebras']}"\n`;
+    if (keys['siliconflow']) content += `SILICONFLOW_API_KEY="${keys['siliconflow']}"\n`;
+    if (keys['perplexity']) content += `PERPLEXITY_API_KEY="${keys['perplexity']}"\n`;
 
     navigator.clipboard.writeText(content);
     setCopiedEnv(true);
@@ -196,13 +240,13 @@ export function ProvidersTab({
     {
       level: 2,
       title: 'Tier 2: Cheap Tier (Pay-As-You-Go Backup)',
-      desc: 'Cost-effective frontier alternatives (DeepSeek, Mistral, Together). Activated if Tier 1 runs out of quota.',
+      desc: 'Cost-effective frontier alternatives (DeepSeek, SiliconFlow, Mistral, Together, Perplexity).',
       badgeClass: 'text-cyan-400 bg-cyan-950/80 border-cyan-800',
     },
     {
       level: 3,
-      title: 'Tier 3: Free / High-Throughput Tier (Safety Net)',
-      desc: 'Free rate limits and ultra-fast inference (Gemini 2.0 Flash, Groq 800 tok/s). Guarantees zero coding downtime.',
+      title: 'Tier 3: Free & Edge High-Throughput Tier (Safety Net)',
+      desc: 'Free rate limits & edge speeds (Cloudflare Workers AI, Google Gemini, Groq, Cerebras). Zero coding downtime!',
       badgeClass: 'text-emerald-400 bg-emerald-950/80 border-emerald-800',
     },
   ];
@@ -214,7 +258,7 @@ export function ProvidersTab({
         <div>
           <h2 className="text-base font-bold text-white flex items-center space-x-2">
             <Key className="w-4 h-4 text-cyan-400" />
-            <span>3-Tier Provider Pool & API Keys</span>
+            <span>3-Tier Provider Pool & API Keys (13+ Providers Supported)</span>
           </h2>
           <p className="text-xs text-slate-400">
             Keys are saved in your local browser and automatically forwarded when calling the proxy.
@@ -293,7 +337,11 @@ export function ProvidersTab({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {tierProviders.map((provider) => {
-                const meta = PROVIDER_METADATA[provider.id];
+                const meta = PROVIDER_METADATA[provider.id] || {
+                  color: 'from-slate-600 to-slate-800',
+                  badge: provider.name,
+                  tier: 2,
+                };
                 const isConfiguredEnv = Boolean(envConfigured[provider.id]);
                 const currentKey = keys[provider.id] || '';
                 const hasKey = Boolean(currentKey || isConfiguredEnv);
@@ -345,7 +393,9 @@ export function ProvidersTab({
                     <div className="space-y-2.5">
                       <div>
                         <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 mb-1">
-                          <span>API Key</span>
+                          <span>
+                            {provider.id === 'cloudflare' ? 'Cloudflare API Token' : 'API Key'}
+                          </span>
                           <button
                             type="button"
                             onClick={() => toggleShowKey(provider.id)}
@@ -369,13 +419,29 @@ export function ProvidersTab({
                           placeholder={
                             isConfiguredEnv
                               ? 'Configured in Environment Variables'
-                              : `Enter ${provider.name} API Key`
+                              : `Enter ${provider.name} Key / Token`
                           }
                           value={currentKey}
                           onChange={(e) => handleKeyChange(provider.id, e.target.value)}
                           className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
                         />
                       </div>
+
+                      {/* Extra Field for Cloudflare Account ID */}
+                      {provider.id === 'cloudflare' && (
+                        <div>
+                          <span className="text-[11px] font-semibold text-slate-400 block mb-1">
+                            Cloudflare Account ID
+                          </span>
+                          <input
+                            type="text"
+                            placeholder="e.g. 8f6b89f3a54b38d9751e1882ff207b1c"
+                            value={cfAccountId}
+                            onChange={(e) => handleCfAccountIdChange(e.target.value)}
+                            className="w-full bg-[#0d1117] border border-[#30363d] focus:border-cyan-500 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none"
+                          />
+                        </div>
+                      )}
 
                       {/* Ping Footer */}
                       <div className="flex items-center justify-between pt-2 border-t border-[#30363d]/60 text-xs">
@@ -395,7 +461,7 @@ export function ProvidersTab({
                           {ping && !ping.loading && !ping.success && (
                             <span className="text-rose-400 flex items-center space-x-1" title={ping.error}>
                               <XCircle className="w-3.5 h-3.5" />
-                              <span>Failed</span>
+                              <span>Failed ({ping.status || 'Err'})</span>
                             </span>
                           )}
                         </div>

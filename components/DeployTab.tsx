@@ -72,6 +72,36 @@ export function DeployTab() {
       badgeClass: 'text-amber-400 bg-amber-950/80 border-amber-800',
       desc: 'Mistral AI Key (For Codestral coding model).',
     },
+    {
+      name: 'CLOUDFLARE_API_TOKEN',
+      status: 'Free Tier',
+      badgeClass: 'text-orange-400 bg-orange-950/80 border-orange-800',
+      desc: 'Cloudflare Workers AI API Token (Free 10,000 neurons/day for LLaMA 3.3, Qwen 2.5 Coder, DeepSeek R1).',
+    },
+    {
+      name: 'CLOUDFLARE_ACCOUNT_ID',
+      status: 'Required w/ CF',
+      badgeClass: 'text-orange-400 bg-orange-950/80 border-orange-800',
+      desc: 'Your Cloudflare Account ID (Found in your Cloudflare dashboard URL or Workers overview).',
+    },
+    {
+      name: 'CEREBRAS_API_KEY',
+      status: 'Free Tier',
+      badgeClass: 'text-purple-400 bg-purple-950/80 border-purple-800',
+      desc: 'Cerebras AI Key (World record 1,800 tok/s inference for LLaMA 3.3).',
+    },
+    {
+      name: 'SILICONFLOW_API_KEY',
+      status: 'Low Cost',
+      badgeClass: 'text-blue-400 bg-blue-950/80 border-blue-800',
+      desc: 'SiliconFlow (SiliconCloud) Key for DeepSeek V3, R1, and Qwen models.',
+    },
+    {
+      name: 'PERPLEXITY_API_KEY',
+      status: 'Search',
+      badgeClass: 'text-teal-400 bg-teal-950/80 border-teal-800',
+      desc: 'Perplexity AI Key (Sonar models with live internet citations).',
+    },
   ];
 
   return (

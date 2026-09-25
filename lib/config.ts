@@ -102,11 +102,58 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     ],
   },
   {
+    id: 'cloudflare',
+    name: 'Cloudflare Workers AI',
+    baseUrl: 'https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1',
+    enabled: true,
+    priority: 9,
+    models: [
+      '@cf/meta/llama-3.3-70b-instruct',
+      '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',
+      '@cf/qwen/qwen2.5-coder-32b-instruct',
+      '@cf/meta/llama-3.1-8b-instruct',
+    ],
+  },
+  {
+    id: 'cerebras',
+    name: 'Cerebras AI (1,800 tok/s)',
+    baseUrl: 'https://api.cerebras.ai/v1',
+    enabled: true,
+    priority: 10,
+    models: [
+      'llama-3.3-70b',
+      'llama3.1-8b',
+    ],
+  },
+  {
+    id: 'siliconflow',
+    name: 'SiliconFlow (SiliconCloud)',
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    enabled: true,
+    priority: 11,
+    models: [
+      'deepseek-ai/DeepSeek-V3',
+      'deepseek-ai/DeepSeek-R1',
+      'Qwen/Qwen2.5-Coder-32B-Instruct',
+    ],
+  },
+  {
+    id: 'perplexity',
+    name: 'Perplexity AI',
+    baseUrl: 'https://api.perplexity.ai',
+    enabled: true,
+    priority: 12,
+    models: [
+      'sonar-pro',
+      'sonar',
+    ],
+  },
+  {
     id: 'custom',
     name: 'Custom / Ollama / Local',
     baseUrl: 'http://localhost:11434/v1',
     enabled: false,
-    priority: 9,
+    priority: 13,
     models: [
       'qwen2.5-coder:latest',
       'llama3.3:latest',
@@ -207,11 +254,25 @@ export function getProviderApiKey(
       return process.env.MISTRAL_API_KEY;
     case 'together':
       return process.env.TOGETHER_API_KEY;
+    case 'cloudflare':
+      return process.env.CLOUDFLARE_API_KEY || process.env.CLOUDFLARE_API_TOKEN;
+    case 'cerebras':
+      return process.env.CEREBRAS_API_KEY;
+    case 'siliconflow':
+      return process.env.SILICONFLOW_API_KEY;
+    case 'perplexity':
+      return process.env.PERPLEXITY_API_KEY;
     case 'custom':
       return process.env.CUSTOM_API_KEY;
     default:
       return undefined;
   }
+}
+
+export function getCloudflareAccountId(
+  headerKeys: Record<string, string> = {}
+): string | undefined {
+  return headerKeys['x-cloudflare-account-id'] || process.env.CLOUDFLARE_ACCOUNT_ID;
 }
 
 export function getProviderBaseUrl(
@@ -220,6 +281,10 @@ export function getProviderBaseUrl(
 ): string {
   if (headerKeys[`x-${providerId}-base-url`]) {
     return headerKeys[`x-${providerId}-base-url`];
+  }
+  if (providerId === 'cloudflare') {
+    const accId = getCloudflareAccountId(headerKeys) || '{account_id}';
+    return `https://api.cloudflare.com/client/v4/accounts/${accId}/ai/v1`;
   }
   if (providerId === 'custom' && process.env.CUSTOM_BASE_URL) {
     return process.env.CUSTOM_BASE_URL;

@@ -55,7 +55,7 @@ export function Sidebar({
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard & Quota', icon: Activity, badge: null },
-    { id: 'providers', label: 'Provider Tiers (3-Tier)', icon: Cpu, badge: '9' },
+    { id: 'providers', label: 'Provider Tiers (3-Tier)', icon: Cpu, badge: '13' },
     { id: 'playground', label: 'Playground & Test', icon: Terminal, badge: 'Live' },
     { id: 'integrations', label: 'CLI & IDE Setup', icon: Layers, badge: null },
     { id: 'deploy', label: 'Deploy Vercel / Netlify', icon: Rocket, badge: 'Cloud' },

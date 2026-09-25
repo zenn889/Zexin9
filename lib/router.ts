@@ -39,8 +39,14 @@ export function resolveCandidates(
   const modelLower = requestedModel.toLowerCase();
   const candidates: RouteCandidate[] = [];
 
-  // Determine primary provider candidate
-  if (modelLower.startsWith('claude')) {
+  if (modelLower.startsWith('@cf/') || modelLower.includes('cloudflare')) {
+    candidates.push({ provider: 'cloudflare', model: requestedModel });
+    candidates.push({ provider: 'groq', model: 'llama-3.3-70b-versatile' });
+    candidates.push({ provider: 'gemini', model: 'gemini-2.0-flash' });
+  } else if (modelLower.startsWith('sonar')) {
+    candidates.push({ provider: 'perplexity', model: requestedModel });
+    candidates.push({ provider: 'openai', model: 'gpt-4o' });
+  } else if (modelLower.startsWith('claude')) {
     candidates.push({ provider: 'anthropic', model: requestedModel });
     candidates.push({ provider: 'openrouter', model: `anthropic/${requestedModel}` });
     candidates.push({ provider: 'deepseek', model: 'deepseek-chat' });
@@ -60,10 +66,14 @@ export function resolveCandidates(
   } else if (modelLower.startsWith('deepseek')) {
     candidates.push({ provider: 'deepseek', model: requestedModel });
     candidates.push({ provider: 'groq', model: 'deepseek-r1-distill-llama-70b' });
+    candidates.push({ provider: 'siliconflow', model: 'deepseek-ai/DeepSeek-V3' });
+    candidates.push({ provider: 'cloudflare', model: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b' });
     candidates.push({ provider: 'openrouter', model: `deepseek/${requestedModel}` });
     candidates.push({ provider: 'gemini', model: 'gemini-2.0-flash' });
   } else if (modelLower.startsWith('llama') || modelLower.startsWith('mixtral')) {
     candidates.push({ provider: 'groq', model: requestedModel });
+    candidates.push({ provider: 'cerebras', model: 'llama-3.3-70b' });
+    candidates.push({ provider: 'cloudflare', model: '@cf/meta/llama-3.3-70b-instruct' });
     candidates.push({ provider: 'together', model: `meta-llama/${requestedModel}` });
     candidates.push({ provider: 'openrouter', model: `meta-llama/${requestedModel}` });
     candidates.push({ provider: 'gemini', model: 'gemini-2.0-flash' });
@@ -72,7 +82,10 @@ export function resolveCandidates(
     candidates.push({ provider: 'openrouter', model: `mistralai/${requestedModel}` });
     candidates.push({ provider: 'deepseek', model: 'deepseek-chat' });
   } else if (modelLower.includes('/')) {
-    // OpenRouter style model like "anthropic/claude-3.5-sonnet"
+    // OpenRouter or SiliconFlow / Cloudflare style model
+    if (modelLower.startsWith('deepseek-ai/')) {
+      candidates.push({ provider: 'siliconflow', model: requestedModel });
+    }
     candidates.push({ provider: 'openrouter', model: requestedModel });
     candidates.push({ provider: 'openai', model: 'gpt-4o' });
   } else {

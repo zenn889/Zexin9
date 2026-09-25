@@ -13,12 +13,16 @@ const TEST_MODELS: Record<ProviderId, string> = {
   openrouter: 'openai/gpt-4o-mini',
   mistral: 'mistral-small-latest',
   together: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+  cloudflare: '@cf/meta/llama-3.1-8b-instruct',
+  cerebras: 'llama3.1-8b',
+  siliconflow: 'Qwen/Qwen2.5-Coder-7B-Instruct',
+  perplexity: 'sonar',
   custom: 'llama3.3:latest',
 };
 
 export async function POST(req: NextRequest) {
   try {
-    const { provider, apiKey, baseUrl } = await req.json();
+    const { provider, apiKey, baseUrl, accountId } = await req.json();
 
     if (!provider) {
       return new Response(JSON.stringify({ success: false, error: 'Provider is required' }), {
@@ -41,6 +45,9 @@ export async function POST(req: NextRequest) {
     }
     if (baseUrl) {
       headerKeys[`x-${provider}-base-url`] = baseUrl;
+    }
+    if (accountId) {
+      headerKeys['x-cloudflare-account-id'] = accountId;
     }
 
     const start = Date.now();

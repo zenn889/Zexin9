@@ -7,6 +7,10 @@ export type ProviderId =
   | 'openrouter'
   | 'mistral'
   | 'together'
+  | 'cloudflare'
+  | 'cerebras'
+  | 'siliconflow'
+  | 'perplexity'
   | 'custom';
 
 export interface ProviderConfig {
