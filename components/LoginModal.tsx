@@ -72,22 +72,25 @@ export function LoginModal({ onLoginSuccess, hasMasterKey = true }: LoginModalPr
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d1117]/95 backdrop-blur-2xl p-4 overflow-y-auto">
-      <div className="w-full max-w-md bg-[#161b22] border border-[#30363d] rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6 text-slate-100 relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#060913]/95 backdrop-blur-2xl p-4 overflow-y-auto">
+      <div className="w-full max-w-md bg-gradient-to-b from-[#0f172a]/90 to-[#070b14]/95 border border-slate-800/90 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 text-slate-100 relative">
         {/* Brand & Badge */}
-        <div className="text-center space-y-2.5">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-white text-3xl mx-auto shadow-xl shadow-cyan-500/25 border border-cyan-400/30">
-            9
+        <div className="text-center space-y-3">
+          <div className="relative inline-block">
+            <div className="absolute -inset-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-2xl blur-md opacity-60" />
+            <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-white text-2xl mx-auto shadow-xl border border-cyan-300/40">
+              Z9
+            </div>
           </div>
           <div>
             <h2 className="text-xl font-black text-white tracking-tight flex items-center justify-center space-x-2">
               <Lock className="w-5 h-5 text-cyan-400" />
-              <span>9Router Security Gate</span>
+              <span>Zexin9 Security Gate</span>
             </h2>
             <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
               {!hasMasterKey
-                ? 'Tentukan Kunci Akses (Master Key) pertama kali untuk mengamankan web dashboard ini.'
-                : 'Web ini terproteksi. Masukkan Kunci Akses (Master Key) untuk membuka dashboard.'}
+                ? 'Tentukan Kunci Akses (Master Key) pertama kali untuk mengamankan Zexin9 Gateway ini.'
+                : 'Zexin9 Gateway terproteksi. Masukkan Kunci Akses (Master Key) untuk membuka dashboard.'}
             </p>
           </div>
         </div>
@@ -165,12 +168,12 @@ export function LoginModal({ onLoginSuccess, hasMasterKey = true }: LoginModalPr
           </button>
         </form>
 
-        <div className="pt-2 border-t border-[#30363d] flex items-center justify-between text-[11px] font-mono text-slate-500">
+        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-500">
           <span className="flex items-center space-x-1">
             <Shield className="w-3 h-3 text-cyan-400" />
             <span>AES-256 Auth Shield</span>
           </span>
-          <span className="text-slate-400">9Router v1.0</span>
+          <span className="text-cyan-400 font-semibold">Zexin9 v2.0</span>
         </div>
       </div>
     </div>

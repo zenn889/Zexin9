@@ -1,13 +1,13 @@
-# 🌐 9Router Cloud (Web & Serverless Edition)
+# 🌐 Zexin9 Gateway (Cloud & Serverless Edition)
 
-> AI Gateway & Multi-Tier Proxy dengan fitur Automatic Fallback, RTK Token Saver, dan kompatibilitas ganda (OpenAI & Anthropic API) yang siap dijalankan secara gratis di **Vercel** atau **Netlify**.
+> Next-Gen Multi-Provider AI Gateway & Multi-Tier Proxy dengan fitur Automatic Fallback, RTK Token Saver, Security Gate, dan kompatibilitas ganda (OpenAI & Anthropic API) yang siap dijalankan secara gratis di **Vercel** atau **Netlify**.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fzenn889%2FZexin9&project-name=zexin9-router&repository-name=Zexin9)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fzenn889%2FZexin9&project-name=zexin9-gateway&repository-name=Zexin9)
 [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/zenn889/Zexin9)
 
 ---
 
-## ⚡ Fitur Utama (Seperti 9Router)
+## ⚡ Fitur Utama Zexin9
 
 1. **Multi-Tier Auto Fallback (Anti Quota Exhausted)**
    - Jika provider utama Anda mengalami **Rate Limit (429)**, **Quota Habis (402/403)**, atau **Server Error (500/503)**, gateway secara otomatis mengalihkan request ke provider cadangan (misal: Anthropic Claude → OpenAI GPT-4o → Google Gemini → DeepSeek → Groq) tanpa memutus proses coding Anda!
@@ -93,7 +93,7 @@ npx netlify deploy --build --prod
 1. Buka **Cursor Settings** → **Models**.
 2. Aktifkan **Override OpenAI Base URL**.
 3. Isi Base URL: `https://<domain-anda>.vercel.app/v1`
-4. Isi API Key: `ROUTER_API_KEY` Anda (atau ketik `9router` jika tidak memakai master key).
+4. Isi API Key: `ROUTER_API_KEY` Anda (atau ketik `zexin9` jika tidak memakai master key).
 5. Tambahkan model: `auto-smart` atau `claude-3-5-sonnet`.
 
 ### 2. Cline (VS Code Extension)
@@ -104,7 +104,7 @@ npx netlify deploy --build --prod
 5. Masukkan **Model ID**: `auto-smart` atau `auto-code`.
 
 ### 3. Claude Code CLI (`claude`)
-Karena 9Router Web menyediakan endpoint `/v1/messages`, Anda bisa langsung mengarahkan Claude Code CLI:
+Karena Zexin9 Gateway menyediakan endpoint `/v1/messages`, Anda bisa langsung mengarahkan Claude Code CLI:
 ```bash
 export ANTHROPIC_BASE_URL="https://<domain-anda>.vercel.app"
 export ANTHROPIC_API_KEY="your-gateway-key"

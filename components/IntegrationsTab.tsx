@@ -20,8 +20,8 @@ export function IntegrationsTab({ baseUrl, gatewaySecret }: IntegrationsTabProps
   const [activeClient, setActiveClient] = useState('cursor');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const effectiveBaseUrl = baseUrl ? `${baseUrl}/v1` : 'https://your-9router.vercel.app/v1';
-  const effectiveAuthKey = gatewaySecret || 'sk-9router';
+  const effectiveBaseUrl = baseUrl ? `${baseUrl}/v1` : 'https://your-zexin9.vercel.app/v1';
+  const effectiveAuthKey = gatewaySecret || 'sk-zx9-gateway';
 
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -33,7 +33,7 @@ export function IntegrationsTab({ baseUrl, gatewaySecret }: IntegrationsTabProps
     cursor: {
       title: 'Cursor IDE',
       badge: 'Recommended',
-      description: 'Connect Cursor to 9Router to never get stopped by quota limits during heavy coding sessions.',
+      description: 'Connect Cursor to Zexin9 to never get stopped by quota limits during heavy coding sessions.',
       steps: [
         'Open Cursor Settings → Models (or Features → Model)',
         'Turn ON "Override OpenAI Base URL"',
@@ -49,7 +49,7 @@ Model   : auto-smart`,
     cline: {
       title: 'Cline (VS Code)',
       badge: 'Agentic',
-      description: 'Use 9Router as an OpenAI-compatible agentic backend in Cline for autonomous development.',
+      description: 'Use Zexin9 as an OpenAI-compatible agentic backend in Cline for autonomous development.',
       steps: [
         'Click the Gear icon ⚙️ in the Cline panel',
         'Set API Provider to: "OpenAI Compatible"',
@@ -66,7 +66,7 @@ Model ID     : auto-smart`,
     claudecode: {
       title: 'Claude Code CLI',
       badge: 'Anthropic Native',
-      description: 'Run Anthropic\'s Claude Code CLI with any AI model (Gemini, DeepSeek, OpenAI) via 9Router.',
+      description: 'Run Anthropic\'s Claude Code CLI with any AI model (Gemini, DeepSeek, OpenAI) via Zexin9.',
       steps: [
         'Install Claude Code: npm install -g @anthropic-ai/claude-code',
         `Set ANTHROPIC_BASE_URL to your gateway base URL (without /v1)`,
@@ -74,7 +74,7 @@ Model ID     : auto-smart`,
         'Run claude in your terminal!',
       ],
       code: `# Run this in terminal before launching Claude Code:
-export ANTHROPIC_BASE_URL="${baseUrl || 'https://your-9router.vercel.app'}"
+export ANTHROPIC_BASE_URL="${baseUrl || 'https://your-zexin9.vercel.app'}"
 export ANTHROPIC_API_KEY="${effectiveAuthKey}"
 
 # Launch Claude Code
@@ -83,7 +83,7 @@ claude`,
     continue: {
       title: 'Continue.dev',
       badge: 'VS Code & JetBrains',
-      description: 'Add 9Router to your ~/.continue/config.json for VS Code or JetBrains IDEs.',
+      description: 'Add Zexin9 to your ~/.continue/config.json for VS Code or JetBrains IDEs.',
       steps: [
         'Open ~/.continue/config.json',
         'Add the model configuration under "models" array:',
@@ -91,7 +91,7 @@ claude`,
       code: `{
   "models": [
     {
-      "title": "9Router Auto-Smart",
+      "title": "Zexin9 Auto-Smart",
       "provider": "openai",
       "model": "auto-smart",
       "apiBase": "${effectiveBaseUrl}",
@@ -120,7 +120,7 @@ claude`,
     python: {
       title: 'Python (OpenAI SDK)',
       badge: 'SDK',
-      description: 'Use the official openai Python package with 9Router.',
+      description: 'Use the official openai Python package with Zexin9.',
       steps: ['Install package: pip install openai', 'Execute the Python script below:'],
       code: `from openai import OpenAI
 
@@ -153,7 +153,7 @@ for chunk in response:
           </h2>
         </div>
         <p className="text-xs sm:text-sm text-slate-400 mt-1">
-          Connect your favorite coding agent, IDE, or CLI to 9Router. One endpoint to rule them all.
+          Connect your favorite coding agent, IDE, or CLI to Zexin9. One endpoint to rule them all.
         </p>
       </div>
 

@@ -64,14 +64,14 @@ export function Navbar({
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-white via-slate-100 to-cyan-400 bg-clip-text text-transparent">
-                  9Router
+                  Zexin9
                 </span>
                 <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-mono font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-700/60 shadow-inner">
-                  Cloud
+                  Gateway
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
-                Serverless AI Proxy & Fallback Multiplexer
+                Next-Gen Multi-Provider AI Proxy & Fallback Multiplexer
               </p>
             </div>
           </div>
@@ -99,7 +99,7 @@ export function Navbar({
             <div className="flex items-center space-x-1.5 font-mono text-xs text-slate-300 pl-1">
               <span className="text-slate-500 text-[10px]">ENDPOINT:</span>
               <span className="text-cyan-300 font-medium">
-                {baseUrl ? `${baseUrl}/v1` : 'https://your-9router.vercel.app/v1'}
+                {baseUrl ? `${baseUrl}/v1` : 'https://your-zexin9.vercel.app/v1'}
               </span>
             </div>
 

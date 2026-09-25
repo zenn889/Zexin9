@@ -71,7 +71,7 @@ export function OverviewTab({ onSelectTab, configuredCount }: OverviewTabProps) 
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-cyan-950/80 border border-cyan-800/60 text-cyan-300 text-xs font-mono font-semibold shadow-inner">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-              <span>9ROUTER CLOUD • VERCEL & NETLIFY SERVERLESS</span>
+              <span>ZEXIN9 GATEWAY • VERCEL & NETLIFY SERVERLESS</span>
             </span>
             <span className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 text-xs font-mono">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
@@ -92,7 +92,7 @@ export function OverviewTab({ onSelectTab, configuredCount }: OverviewTabProps) 
           </h1>
 
           <p className="text-slate-300 text-base sm:text-xl max-w-3xl leading-relaxed font-normal">
-            9Router is the unified, high-availability AI proxy for <strong>Cursor</strong>, <strong>Cline</strong>, and <strong>Claude Code</strong>. It multiplexes Anthropic, OpenAI, Gemini, Groq, and DeepSeek through a single resilient endpoint with automatic fallback and prompt compression.
+            Zexin9 is the unified, high-availability AI proxy for <strong>Cursor</strong>, <strong>Cline</strong>, and <strong>Claude Code</strong>. It multiplexes Anthropic, OpenAI, Gemini, Groq, and DeepSeek through a single resilient endpoint with automatic fallback and prompt compression.
           </p>
 
           {/* Action Buttons */}
@@ -168,7 +168,7 @@ export function OverviewTab({ onSelectTab, configuredCount }: OverviewTabProps) 
               </h2>
             </div>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Watch how 9Router intercepts rate limits in real-time and routes your request to a working provider.
+              Watch how Zexin9 intercepts rate limits in real-time and routes your request to a working provider.
             </p>
           </div>
 

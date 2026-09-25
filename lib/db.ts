@@ -75,7 +75,12 @@ function getDataDir(): string {
 }
 
 function getDataFilePath(): string {
-  return path.join(getDataDir(), '9router-data.json');
+  const primary = path.join(getDataDir(), 'zexin9-data.json');
+  const legacy = path.join(getDataDir(), '9router-data.json');
+  if (!fs.existsSync(primary) && fs.existsSync(legacy)) {
+    return legacy;
+  }
+  return primary;
 }
 
 function getDbConfigFilePath(): string {
@@ -152,7 +157,7 @@ function getEffectiveMongoDbName(): string {
   return (
     process.env.MONGODB_DB ||
     runtimeDbConfig.mongodbDb ||
-    '9router'
+    'zexin9'
   );
 }
 
@@ -355,7 +360,7 @@ export const db = {
     const newToken: ClientToken = {
       id: `tok-${Date.now()}`,
       name,
-      token: `sk-9r-${randomHex}`,
+      token: `sk-zx9-${randomHex}`,
       createdAt: new Date().toISOString(),
       requestCount: 0,
     };
@@ -654,7 +659,7 @@ export const db = {
   },
 
   // --- Connection Testers ---
-  async testMongoConnection(uri: string, dbName = '9router') {
+  async testMongoConnection(uri: string, dbName = 'zexin9') {
     if (!uri || !uri.trim()) {
       return { success: false, message: 'URI MongoDB tidak boleh kosong.' };
     }
@@ -662,7 +667,7 @@ export const db = {
     try {
       tempClient = new MongoClient(uri.trim(), { serverSelectionTimeoutMS: 5000 });
       await tempClient.connect();
-      const testDb = tempClient.db(dbName.trim() || '9router');
+      const testDb = tempClient.db(dbName.trim() || 'zexin9');
       await testDb.command({ ping: 1 });
       const collections = await testDb.listCollections().toArray();
       await tempClient.close();
@@ -784,7 +789,7 @@ export const db = {
   exportAllData() {
     loadData();
     return {
-      appName: '9Router Gateway',
+      appName: 'Zexin9 Gateway',
       exportedAt: new Date().toISOString(),
       masterKey: memoryMasterKey,
       tokens: memoryTokens,

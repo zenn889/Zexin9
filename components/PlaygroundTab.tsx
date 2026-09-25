@@ -49,7 +49,7 @@ export function PlaygroundTab({
     {
       role: 'assistant',
       content:
-        '👋 **9Router Gateway Online!**\n\nPilih model apa pun (misal `auto-smart` atau `auto-fast`) dan kirim prompt koding Anda. Router akan otomatis memilih provider terbaik dan mengaktifkan failover jika terjadi limit kuota!',
+        '👋 **Zexin9 Gateway Online!**\n\nPilih model apa pun (misal `auto-smart` atau `auto-fast`) dan kirim prompt koding Anda. Router Zexin9 akan otomatis memilih provider terbaik dan mengaktifkan failover jika terjadi limit kuota!',
     },
   ]);
   const [input, setInput] = useState('');
@@ -69,7 +69,8 @@ export function PlaygroundTab({
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedUserModels = localStorage.getItem('9router_user_models');
+      const storedUserModels =
+        localStorage.getItem('zexin9_user_models') || localStorage.getItem('9router_user_models');
       if (storedUserModels) {
         try {
           setUserCustomModels(JSON.parse(storedUserModels));

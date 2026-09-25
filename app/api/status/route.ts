@@ -24,8 +24,8 @@ export async function GET(req: Request) {
   return new Response(
     JSON.stringify({
       status: 'online',
-      gatewayName: '9Router Cloud',
-      version: '1.0.0',
+      gatewayName: 'Zexin9 Cloud Gateway',
+      version: '2.0.0',
       baseUrl,
       authRequired: hasGatewaySecret,
       providers: providersStatus,

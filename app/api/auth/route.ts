@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   // If no master key has been set, auth is required and user must setup initial key!
   // If master key is set, check auth cookie against master key
-  const authCookie = req.cookies.get('9router_auth')?.value;
+  const authCookie = req.cookies.get('zexin9_auth')?.value || req.cookies.get('9router_auth')?.value;
   const isAuthenticated = hasMasterKey && Boolean(authCookie && authCookie === secret);
 
   return new Response(
@@ -49,7 +49,13 @@ export async function POST(req: NextRequest) {
       );
 
       // Set cookie for 30 days
-      response.headers.set(
+      response.headers.append(
+        'Set-Cookie',
+        `zexin9_auth=${encodeURIComponent(
+          keyToSet
+        )}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}`
+      );
+      response.headers.append(
         'Set-Cookie',
         `9router_auth=${encodeURIComponent(
           keyToSet
@@ -61,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     // 2. Change Key (if logged in and wants to update key)
     if (action === 'change') {
-      const authCookie = req.cookies.get('9router_auth')?.value;
+      const authCookie = req.cookies.get('zexin9_auth')?.value || req.cookies.get('9router_auth')?.value;
       if (authCookie !== currentSecret) {
         return new Response(
           JSON.stringify({ success: false, error: 'Unauthorized to change key' }),
@@ -79,7 +85,13 @@ export async function POST(req: NextRequest) {
         JSON.stringify({ success: true, message: 'Access Key berhasil diperbarui!' }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
-      response.headers.set(
+      response.headers.append(
+        'Set-Cookie',
+        `zexin9_auth=${encodeURIComponent(
+          newKey.trim()
+        )}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}`
+      );
+      response.headers.append(
         'Set-Cookie',
         `9router_auth=${encodeURIComponent(
           newKey.trim()
@@ -95,7 +107,13 @@ export async function POST(req: NextRequest) {
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
 
-      response.headers.set(
+      response.headers.append(
+        'Set-Cookie',
+        `zexin9_auth=${encodeURIComponent(
+          currentSecret
+        )}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}`
+      );
+      response.headers.append(
         'Set-Cookie',
         `9router_auth=${encodeURIComponent(
           currentSecret
@@ -123,7 +141,11 @@ export async function DELETE() {
     headers: { 'Content-Type': 'application/json' },
   });
 
-  response.headers.set(
+  response.headers.append(
+    'Set-Cookie',
+    'zexin9_auth=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0'
+  );
+  response.headers.append(
     'Set-Cookie',
     '9router_auth=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0'
   );

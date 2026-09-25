@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '9Router Cloud - AI Gateway & Multi-Tier Fallback Proxy',
+  title: 'Zexin9 - Next-Gen Multi-Provider AI Gateway & Proxy',
   description:
-    'Serverless AI Router for Vercel and Netlify. Features multi-tier automatic fallback, RTK token compression, and unified OpenAI & Anthropic endpoints for Cursor, Cline, and Claude Code.',
+    'High-Availability AI Gateway for Cursor, Cline, and Claude Code. Features multi-tier automatic fallback, RTK token compression, and native MongoDB & Supabase persistence.',
 };
 
 export default function RootLayout({

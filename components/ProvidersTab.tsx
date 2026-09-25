@@ -134,16 +134,16 @@ export function ProvidersTab({
   useEffect(() => {
     // 1. Load from localStorage
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('9router_cf_account_id');
+      const stored = localStorage.getItem('zexin9_cf_account_id') || localStorage.getItem('9router_cf_account_id');
       if (stored) setCfAccountId(stored);
 
-      const storedModels = localStorage.getItem('9router_selected_models');
+      const storedModels = localStorage.getItem('zexin9_selected_models') || localStorage.getItem('9router_selected_models');
       if (storedModels) setSelectedModels(JSON.parse(storedModels));
 
-      const storedCustom = localStorage.getItem('9router_custom_models');
+      const storedCustom = localStorage.getItem('zexin9_custom_models') || localStorage.getItem('9router_custom_models');
       if (storedCustom) setCustomModelInputs(JSON.parse(storedCustom));
 
-      const storedUserModels = localStorage.getItem('9router_user_models');
+      const storedUserModels = localStorage.getItem('zexin9_user_models') || localStorage.getItem('9router_user_models');
       if (storedUserModels) {
         try {
           setUserCustomModels(JSON.parse(storedUserModels));
@@ -199,6 +199,7 @@ export function ProvidersTab({
   const handleCfAccountIdChange = (val: string) => {
     setCfAccountId(val);
     if (typeof window !== 'undefined') {
+      localStorage.setItem('zexin9_cf_account_id', val);
       localStorage.setItem('9router_cf_account_id', val);
     }
   };
@@ -207,6 +208,7 @@ export function ProvidersTab({
     setSelectedModels((prev) => {
       const updated = { ...prev, [providerId]: model };
       if (typeof window !== 'undefined') {
+        localStorage.setItem('zexin9_selected_models', JSON.stringify(updated));
         localStorage.setItem('9router_selected_models', JSON.stringify(updated));
       }
       return updated;
@@ -217,6 +219,7 @@ export function ProvidersTab({
     setCustomModelInputs((prev) => {
       const updated = { ...prev, [providerId]: model };
       if (typeof window !== 'undefined') {
+        localStorage.setItem('zexin9_custom_models', JSON.stringify(updated));
         localStorage.setItem('9router_custom_models', JSON.stringify(updated));
       }
       return updated;
@@ -232,6 +235,7 @@ export function ProvidersTab({
       if (existing.includes(raw)) return prev;
       const updated = { ...prev, [providerId]: [...existing, raw] };
       if (typeof window !== 'undefined') {
+        localStorage.setItem('zexin9_user_models', JSON.stringify(updated));
         localStorage.setItem('9router_user_models', JSON.stringify(updated));
       }
       return updated;
@@ -344,7 +348,7 @@ export function ProvidersTab({
   };
 
   const copyEnvToClipboard = () => {
-    let content = `# 9Router Environment Variables for Vercel / Netlify\n\n`;
+    let content = `# Zexin9 Environment Variables for Vercel / Netlify\n\n`;
     if (gatewaySecret) content += `ROUTER_API_KEY="${gatewaySecret}"\n\n`;
     if (keys['anthropic']) content += `ANTHROPIC_API_KEY="${keys['anthropic']}"\n`;
     if (keys['openai']) content += `OPENAI_API_KEY="${keys['openai']}"\n`;
@@ -493,7 +497,7 @@ export function ProvidersTab({
         </p>
         <input
           type="text"
-          placeholder="e.g. sk-9router-secret-token"
+          placeholder="e.g. sk-zx9-master-token"
           value={gatewaySecret}
           onChange={(e) => handleGatewaySecretChange(e.target.value)}
           className="w-full max-w-lg bg-[#0d1117] border border-[#30363d] focus:border-indigo-500 rounded-lg px-3 py-1.5 text-xs font-mono text-indigo-200 placeholder-slate-600 focus:outline-none"

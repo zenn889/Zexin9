@@ -108,26 +108,26 @@ export function SecurityModal({ isOpen, onClose, onLogout }: SecurityModalProps)
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto">
-      <div className="w-full max-w-lg bg-[#161b22] border border-[#30363d] rounded-2xl p-6 sm:p-7 shadow-2xl space-y-6 text-slate-100 relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#060913]/90 backdrop-blur-xl p-4 overflow-y-auto">
+      <div className="w-full max-w-lg bg-gradient-to-b from-[#0f172a]/95 to-[#070b14]/95 border border-slate-800/90 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-6 text-slate-100 relative">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#30363d]">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
           <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-800 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-cyan-950 border border-cyan-800 flex items-center justify-center shadow-inner">
               <Shield className="w-4 h-4 text-cyan-400" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white tracking-tight flex items-center space-x-2">
-                <span>Pengaturan Keamanan & Security Gate</span>
+              <h2 className="text-base font-extrabold text-white tracking-tight flex items-center space-x-2">
+                <span>Zexin9 Security Gate & Master Key</span>
               </h2>
               <p className="text-xs text-slate-400 font-mono">
-                Proteksi Akses Web & Proxy Master Key
+                Proteksi Akses Web Dashboard & Proxy Master Key
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#21262d] transition"
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
             title="Tutup"
           >
             <X className="w-4 h-4" />

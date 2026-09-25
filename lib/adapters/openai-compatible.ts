@@ -17,8 +17,8 @@ export async function callOpenAICompatible(
 
   // OpenRouter requires HTTP-Referer and X-Title headers
   if (endpoint.includes('openrouter.ai')) {
-    headers['HTTP-Referer'] = 'https://9router.local';
-    headers['X-Title'] = '9Router Cloud Gateway';
+    headers['HTTP-Referer'] = 'https://zexin9.local';
+    headers['X-Title'] = 'Zexin9 Cloud Gateway';
   }
 
   return await fetch(url, {

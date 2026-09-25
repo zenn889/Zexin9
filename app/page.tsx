@@ -34,19 +34,19 @@ export default function Home() {
       setBaseUrl(window.location.origin);
 
       try {
-        const storedKeys = localStorage.getItem('9router_keys');
+        const storedKeys = localStorage.getItem('zexin9_keys') || localStorage.getItem('9router_keys');
         if (storedKeys) setKeys(JSON.parse(storedKeys));
 
-        const storedBaseUrls = localStorage.getItem('9router_baseurls');
+        const storedBaseUrls = localStorage.getItem('zexin9_baseurls') || localStorage.getItem('9router_baseurls');
         if (storedBaseUrls) setBaseUrls(JSON.parse(storedBaseUrls));
 
-        const storedSecret = localStorage.getItem('9router_gateway_secret');
+        const storedSecret = localStorage.getItem('zexin9_gateway_secret') || localStorage.getItem('9router_gateway_secret');
         if (storedSecret) setGatewaySecret(storedSecret);
 
-        const storedRtk = localStorage.getItem('9router_rtk');
+        const storedRtk = localStorage.getItem('zexin9_rtk') ?? localStorage.getItem('9router_rtk');
         if (storedRtk !== null) setRtkEnabled(storedRtk === 'true');
 
-        const storedCaveman = localStorage.getItem('9router_caveman');
+        const storedCaveman = localStorage.getItem('zexin9_caveman') ?? localStorage.getItem('9router_caveman');
         if (storedCaveman !== null) setCavemanEnabled(storedCaveman === 'true');
       } catch (e) {
         console.error('Failed to load settings from localStorage', e);
@@ -67,6 +67,7 @@ export default function Home() {
         if (authData.currentKey) {
           setGatewaySecret(authData.currentKey);
           if (typeof window !== 'undefined') {
+            localStorage.setItem('zexin9_gateway_secret', authData.currentKey);
             localStorage.setItem('9router_gateway_secret', authData.currentKey);
           }
         }
@@ -122,6 +123,7 @@ export default function Home() {
   const handleRtkToggle = (val: boolean) => {
     setRtkEnabled(val);
     if (typeof window !== 'undefined') {
+      localStorage.setItem('zexin9_rtk', String(val));
       localStorage.setItem('9router_rtk', String(val));
     }
   };
@@ -129,6 +131,7 @@ export default function Home() {
   const handleCavemanToggle = (val: boolean) => {
     setCavemanEnabled(val);
     if (typeof window !== 'undefined') {
+      localStorage.setItem('zexin9_caveman', String(val));
       localStorage.setItem('9router_caveman', String(val));
     }
   };
@@ -140,12 +143,15 @@ export default function Home() {
   // 1. Loading screen while verifying auth
   if (authChecking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0d1117] text-cyan-400">
+      <div className="min-h-screen flex items-center justify-center bg-[#060913] text-cyan-400">
         <div className="flex flex-col items-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-white text-2xl shadow-xl shadow-cyan-500/25 border border-cyan-400/30 animate-pulse">
-            9
+          <div className="relative">
+            <div className="absolute -inset-2 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-2xl blur-md opacity-60 animate-pulse" />
+            <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-white text-2xl shadow-xl shadow-cyan-500/25 border border-cyan-300/40">
+              Z9
+            </div>
           </div>
-          <span className="font-mono text-xs text-slate-400">Memeriksa Keamanan Gateway...</span>
+          <span className="font-mono text-xs text-slate-400">Memeriksa Keamanan Zexin9 Gateway...</span>
         </div>
       </div>
     );
@@ -154,7 +160,7 @@ export default function Home() {
   // 2. Security Gate: If not authenticated, show ONLY LoginModal
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#0d1117]">
+      <div className="min-h-screen bg-[#060913]">
         <LoginModal
           hasMasterKey={hasMasterKey}
           onLoginSuccess={() => {
@@ -167,8 +173,8 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex bg-[#0d1117] text-slate-100 font-sans">
-      {/* 9Router Authentic Left Sidebar */}
+    <div className="min-h-screen flex bg-[#060913] text-slate-100 font-sans">
+      {/* Zexin9 Authentic Left Sidebar */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -184,7 +190,7 @@ export default function Home() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#0d1117]">
+      <div className="flex-1 flex flex-col min-w-0 bg-[#060913]">
         {/* Top Header */}
         <Header
           activeTab={activeTab}

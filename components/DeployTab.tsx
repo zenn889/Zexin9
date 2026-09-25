@@ -139,7 +139,7 @@ export function DeployTab() {
           </h2>
         </div>
         <p className="text-xs sm:text-sm text-slate-400 mt-1">
-          Deploy your own private 9Router gateway in less than 2 minutes with zero monthly server costs.
+          Deploy your own private Zexin9 gateway in less than 2 minutes with zero monthly server costs.
         </p>
       </div>
 

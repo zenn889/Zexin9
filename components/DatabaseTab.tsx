@@ -58,7 +58,7 @@ export function DatabaseTab() {
 
   // MongoDB Form
   const [mongoUri, setMongoUri] = useState('');
-  const [mongoDbName, setMongoDbName] = useState('9router');
+  const [mongoDbName, setMongoDbName] = useState('zexin9');
   const [showMongoUri, setShowMongoUri] = useState(false);
   const [testingMongo, setTestingMongo] = useState(false);
   const [mongoTestMsg, setMongoTestMsg] = useState<{ success: boolean; text: string } | null>(null);
@@ -66,7 +66,7 @@ export function DatabaseTab() {
   // Supabase Form
   const [supabaseUrl, setSupabaseUrl] = useState('');
   const [supabaseKey, setSupabaseKey] = useState('');
-  const [supabaseTable, setSupabaseTable] = useState('nine_router_state');
+  const [supabaseTable, setSupabaseTable] = useState('zexin9_state');
   const [showSupabaseKey, setShowSupabaseKey] = useState(false);
   const [testingSupabase, setTestingSupabase] = useState(false);
   const [supabaseTestMsg, setSupabaseTestMsg] = useState<{ success: boolean; text: string; tableMissing?: boolean } | null>(null);
@@ -79,26 +79,26 @@ export function DatabaseTab() {
   const [copiedEnv, setCopiedEnv] = useState(false);
 
   const supabaseSqlSchema = `-- Jalankan di SQL Editor Supabase:
-CREATE TABLE IF NOT EXISTS nine_router_state (
+CREATE TABLE IF NOT EXISTS zexin9_state (
   id TEXT PRIMARY KEY,
   data JSONB NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- (Opsional) Berikan izin service role & anon
-ALTER TABLE nine_router_state ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow service role full access" ON nine_router_state
+ALTER TABLE zexin9_state ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow service role full access" ON zexin9_state
   FOR ALL USING (true);`;
 
-  const envSample = `# --- 9Router Database Configuration ---
+  const envSample = `# --- Zexin9 Database Configuration ---
 # Opsi 1: MongoDB Atlas (NoSQL)
-MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/9router?retryWrites=true&w=majority
-MONGODB_DB=9router
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/zexin9?retryWrites=true&w=majority
+MONGODB_DB=zexin9
 
 # Opsi 2: Supabase (PostgreSQL Cloud)
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJh...
-SUPABASE_TABLE=nine_router_state
+SUPABASE_TABLE=zexin9_state
 
 # Master Security Gate
 ROUTER_API_KEY=master_password_anda`;
@@ -279,7 +279,7 @@ ROUTER_API_KEY=master_password_anda`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `9router-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `zexin9-backup-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -536,7 +536,7 @@ ROUTER_API_KEY=master_password_anda`;
                     type={showMongoUri ? 'text' : 'password'}
                     value={mongoUri}
                     onChange={(e) => setMongoUri(e.target.value)}
-                    placeholder="mongodb+srv://<username>:<password>@cluster0.abcde.mongodb.net/9router?retryWrites=true&w=majority"
+                    placeholder="mongodb+srv://<username>:<password>@cluster0.abcde.mongodb.net/zexin9?retryWrites=true&w=majority"
                     className="w-full px-3 py-2 pr-10 rounded-lg bg-[#0d1117] border border-[#30363d] text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
                   />
                   <button
@@ -563,7 +563,7 @@ ROUTER_API_KEY=master_password_anda`;
                   type="text"
                   value={mongoDbName}
                   onChange={(e) => setMongoDbName(e.target.value)}
-                  placeholder="9router"
+                  placeholder="zexin9"
                   className="w-full max-w-sm px-3 py-2 rounded-lg bg-[#0d1117] border border-[#30363d] text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
                 />
               </div>

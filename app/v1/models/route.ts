@@ -24,7 +24,7 @@ export async function GET() {
       id: group.id,
       object: 'model',
       created: 1700000000,
-      owned_by: '9router-gateway',
+      owned_by: 'zexin9-gateway',
       permission: [],
       root: group.id,
       parent: null,
