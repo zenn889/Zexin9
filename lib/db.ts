@@ -2,6 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import { MongoClient, Db } from 'mongodb';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import {
+  setRuntimeStoredKeys,
+  setRuntimeStoredBaseUrls,
+  setRuntimeCfAccountId,
+} from './config';
 
 export interface RequestLog {
   id: string;
@@ -41,6 +46,9 @@ export interface DbConfig {
 let memoryLogs: RequestLog[] = [];
 let memoryTokens: ClientToken[] = [];
 let memoryMasterKey: string = (process.env.ROUTER_API_KEY || process.env.GATEWAY_SECRET || '').trim();
+let memoryProviderKeys: Record<string, string> = {};
+let memoryProviderBaseUrls: Record<string, string> = {};
+let memoryCfAccountId: string = '';
 
 // Runtime DB configuration
 let runtimeDbConfig: DbConfig = {};
@@ -103,6 +111,18 @@ function loadData() {
       }
       if (typeof parsed.masterKey === 'string' && parsed.masterKey.trim().length > 0) {
         memoryMasterKey = parsed.masterKey.trim();
+      }
+      if (parsed.providerKeys && typeof parsed.providerKeys === 'object') {
+        memoryProviderKeys = parsed.providerKeys;
+        setRuntimeStoredKeys(memoryProviderKeys);
+      }
+      if (parsed.providerBaseUrls && typeof parsed.providerBaseUrls === 'object') {
+        memoryProviderBaseUrls = parsed.providerBaseUrls;
+        setRuntimeStoredBaseUrls(memoryProviderBaseUrls);
+      }
+      if (typeof parsed.cfAccountId === 'string') {
+        memoryCfAccountId = parsed.cfAccountId;
+        setRuntimeCfAccountId(memoryCfAccountId);
       }
     }
   } catch {
@@ -193,7 +213,14 @@ function getSupabaseClient(): SupabaseClient | null {
 }
 
 // --- Background Data Persistence ---
-async function persistToCloud(data: { logs: RequestLog[]; tokens: ClientToken[]; masterKey: string }) {
+async function persistToCloud(data: {
+  logs: RequestLog[];
+  tokens: ClientToken[];
+  masterKey: string;
+  providerKeys: Record<string, string>;
+  providerBaseUrls: Record<string, string>;
+  cfAccountId: string;
+}) {
   // 1. MongoDB
   const mongoUri = getEffectiveMongoUri();
   if (mongoUri) {
@@ -208,6 +235,9 @@ async function persistToCloud(data: { logs: RequestLog[]; tokens: ClientToken[];
               masterKey: data.masterKey,
               tokens: data.tokens,
               logs: data.logs,
+              providerKeys: data.providerKeys,
+              providerBaseUrls: data.providerBaseUrls,
+              cfAccountId: data.cfAccountId,
               updatedAt: new Date().toISOString(),
             },
           },
@@ -230,6 +260,9 @@ async function persistToCloud(data: { logs: RequestLog[]; tokens: ClientToken[];
           masterKey: data.masterKey,
           tokens: data.tokens,
           logs: data.logs,
+          providerKeys: data.providerKeys,
+          providerBaseUrls: data.providerBaseUrls,
+          cfAccountId: data.cfAccountId,
         },
         updated_at: new Date().toISOString(),
       });
@@ -262,6 +295,9 @@ function persistData() {
     logs: memoryLogs.slice(0, 500), // retain latest 500 logs
     tokens: memoryTokens,
     masterKey: memoryMasterKey,
+    providerKeys: memoryProviderKeys,
+    providerBaseUrls: memoryProviderBaseUrls,
+    cfAccountId: memoryCfAccountId,
   };
 
   // 1. Local filesystem persistence
@@ -413,10 +449,33 @@ export const db = {
             if (typeof doc.masterKey === 'string' && doc.masterKey.trim().length > 0) {
               memoryMasterKey = doc.masterKey.trim();
             }
+            if (doc.providerKeys && typeof doc.providerKeys === 'object') {
+              memoryProviderKeys = doc.providerKeys;
+              setRuntimeStoredKeys(memoryProviderKeys);
+            }
+            if (doc.providerBaseUrls && typeof doc.providerBaseUrls === 'object') {
+              memoryProviderBaseUrls = doc.providerBaseUrls;
+              setRuntimeStoredBaseUrls(memoryProviderBaseUrls);
+            }
+            if (typeof doc.cfAccountId === 'string') {
+              memoryCfAccountId = doc.cfAccountId;
+              setRuntimeCfAccountId(memoryCfAccountId);
+            }
             syncedSource = 'mongodb';
             // update local cache file
             const filePath = getDataFilePath();
-            fs.writeFileSync(filePath, JSON.stringify({ logs: memoryLogs, tokens: memoryTokens, masterKey: memoryMasterKey }), 'utf-8');
+            fs.writeFileSync(
+              filePath,
+              JSON.stringify({
+                logs: memoryLogs,
+                tokens: memoryTokens,
+                masterKey: memoryMasterKey,
+                providerKeys: memoryProviderKeys,
+                providerBaseUrls: memoryProviderBaseUrls,
+                cfAccountId: memoryCfAccountId,
+              }),
+              'utf-8'
+            );
             return {
               source: 'mongodb',
               logsCount: memoryLogs.length,
@@ -448,9 +507,32 @@ export const db = {
           if (typeof state.masterKey === 'string' && state.masterKey.trim().length > 0) {
             memoryMasterKey = state.masterKey.trim();
           }
+          if (state.providerKeys && typeof state.providerKeys === 'object') {
+            memoryProviderKeys = state.providerKeys;
+            setRuntimeStoredKeys(memoryProviderKeys);
+          }
+          if (state.providerBaseUrls && typeof state.providerBaseUrls === 'object') {
+            memoryProviderBaseUrls = state.providerBaseUrls;
+            setRuntimeStoredBaseUrls(memoryProviderBaseUrls);
+          }
+          if (typeof state.cfAccountId === 'string') {
+            memoryCfAccountId = state.cfAccountId;
+            setRuntimeCfAccountId(memoryCfAccountId);
+          }
           syncedSource = 'supabase';
           const filePath = getDataFilePath();
-          fs.writeFileSync(filePath, JSON.stringify({ logs: memoryLogs, tokens: memoryTokens, masterKey: memoryMasterKey }), 'utf-8');
+          fs.writeFileSync(
+            filePath,
+            JSON.stringify({
+              logs: memoryLogs,
+              tokens: memoryTokens,
+              masterKey: memoryMasterKey,
+              providerKeys: memoryProviderKeys,
+              providerBaseUrls: memoryProviderBaseUrls,
+              cfAccountId: memoryCfAccountId,
+            }),
+            'utf-8'
+          );
           return {
             source: 'supabase',
             logsCount: memoryLogs.length,
@@ -644,6 +726,52 @@ export const db = {
     persistData();
   },
 
+  // --- Provider Keys Management (Multi-Provider Cloud Storage) ---
+  getProviderSettings() {
+    loadData();
+    return {
+      keys: { ...memoryProviderKeys },
+      baseUrls: { ...memoryProviderBaseUrls },
+      cfAccountId: memoryCfAccountId,
+    };
+  },
+
+  setProviderSettings(
+    keys: Record<string, string>,
+    baseUrls: Record<string, string> = {},
+    cfAccountId: string = ''
+  ) {
+    loadData();
+    // Clean and update keys
+    const cleanKeys: Record<string, string> = { ...memoryProviderKeys };
+    Object.entries(keys).forEach(([pId, kVal]) => {
+      if (typeof kVal === 'string') {
+        cleanKeys[pId] = kVal.trim();
+      }
+    });
+    memoryProviderKeys = cleanKeys;
+
+    const cleanUrls: Record<string, string> = { ...memoryProviderBaseUrls };
+    Object.entries(baseUrls).forEach(([pId, uVal]) => {
+      if (typeof uVal === 'string') {
+        cleanUrls[pId] = uVal.trim();
+      }
+    });
+    memoryProviderBaseUrls = cleanUrls;
+
+    if (typeof cfAccountId === 'string') {
+      memoryCfAccountId = cfAccountId.trim();
+    }
+
+    setRuntimeStoredKeys(memoryProviderKeys);
+    setRuntimeStoredBaseUrls(memoryProviderBaseUrls);
+    if (memoryCfAccountId) {
+      setRuntimeCfAccountId(memoryCfAccountId);
+    }
+
+    persistData();
+  },
+
   // --- Backup Export ---
   exportAllData() {
     loadData();
@@ -652,6 +780,9 @@ export const db = {
       exportedAt: new Date().toISOString(),
       masterKey: memoryMasterKey,
       tokens: memoryTokens,
+      providerKeys: memoryProviderKeys,
+      providerBaseUrls: memoryProviderBaseUrls,
+      cfAccountId: memoryCfAccountId,
       logs: memoryLogs,
       stats: this.getStats(),
     };

@@ -127,18 +127,28 @@ export function PlaygroundTab({
       }
 
       Object.entries(keys).forEach(([pId, keyVal]) => {
-        if (keyVal) headers[`x-${pId}-key`] = keyVal;
+        if (keyVal && keyVal.trim()) headers[`x-${pId}-key`] = keyVal.trim();
       });
       Object.entries(baseUrls).forEach(([pId, urlVal]) => {
-        if (urlVal) headers[`x-${pId}-base-url`] = urlVal;
+        if (urlVal && urlVal.trim()) headers[`x-${pId}-base-url`] = urlVal.trim();
       });
+
+      // DeepSeek, Anthropic, & OpenAI strictly require conversations to start with 'user' or 'system'
+      // Discard any initial greeting assistant messages from the payload
+      let apiMessages = newMessages.map((m) => ({ role: m.role, content: m.content }));
+      while (apiMessages.length > 0 && apiMessages[0].role === 'assistant') {
+        apiMessages.shift();
+      }
+      if (apiMessages.length === 0) {
+        apiMessages = [{ role: 'user', content: textToSend.trim() }];
+      }
 
       const res = await fetch('/v1/chat/completions', {
         method: 'POST',
         headers,
         body: JSON.stringify({
           model: selectedModel,
-          messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
+          messages: apiMessages,
           stream: true,
         }),
       });
@@ -150,10 +160,14 @@ export function PlaygroundTab({
 
       if (!res.ok) {
         const errorJson = await res.json().catch(() => null);
-        const errMsg =
+        let errMsg =
           errorJson?.error?.message ||
           errorJson?.error ||
           `HTTP ${res.status}: Fallback exhausted or invalid keys.`;
+
+        if (Array.isArray(errorJson?.error?.failure_chain) && errorJson.error.failure_chain.length > 0) {
+          errMsg += '\n\n**Riwayat Provider Pool:**\n' + errorJson.error.failure_chain.map((c: string) => `• ${c}`).join('\n');
+        }
 
         setMessages((prev) => [
           ...prev,

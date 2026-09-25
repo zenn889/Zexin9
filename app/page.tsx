@@ -81,6 +81,22 @@ export default function Home() {
       } else {
         setIsGatewayOnline(false);
       }
+
+      // Load stored provider keys from cloud DB / server store
+      try {
+        const provRes = await fetch('/api/providers/config');
+        if (provRes.ok) {
+          const cfg = await provRes.json();
+          if (cfg.keys && Object.keys(cfg.keys).length > 0) {
+            setKeys((prev) => ({ ...cfg.keys, ...prev }));
+          }
+          if (cfg.baseUrls && Object.keys(cfg.baseUrls).length > 0) {
+            setBaseUrls((prev) => ({ ...cfg.baseUrls, ...prev }));
+          }
+        }
+      } catch {
+        // ignore
+      }
     } catch {
       setIsGatewayOnline(false);
     } finally {

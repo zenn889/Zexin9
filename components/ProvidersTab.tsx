@@ -128,8 +128,11 @@ export function ProvidersTab({
     >
   >({});
   const [copiedEnv, setCopiedEnv] = useState(false);
+  const [savingAllKeys, setSavingAllKeys] = useState(false);
+  const [saveAllMsg, setSaveAllMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    // 1. Load from localStorage
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('9router_cf_account_id');
       if (stored) setCfAccountId(stored);
@@ -149,7 +152,49 @@ export function ProvidersTab({
         }
       }
     }
+
+    // 2. Load from Cloud Database / Server Store
+    fetch('/api/providers/config')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.keys) {
+          setKeys((prev) => ({ ...data.keys, ...prev }));
+        }
+        if (data.baseUrls) {
+          setBaseUrls((prev) => ({ ...data.baseUrls, ...prev }));
+        }
+        if (data.cfAccountId) {
+          setCfAccountId((prev) => prev || data.cfAccountId);
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  const handleSaveAllToCloud = async () => {
+    setSavingAllKeys(true);
+    setSaveAllMsg(null);
+    try {
+      const res = await fetch('/api/providers/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keys,
+          baseUrls,
+          cfAccountId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSaveAllMsg(`✓ ${data.message}`);
+        setTimeout(() => setSaveAllMsg(null), 4000);
+        onRefreshStatus();
+      }
+    } catch (err: any) {
+      setSaveAllMsg(`Gagal menyimpan: ${err?.message || 'Error'}`);
+    } finally {
+      setSavingAllKeys(false);
+    }
+  };
 
   const handleCfAccountIdChange = (val: string) => {
     setCfAccountId(val);
@@ -382,6 +427,54 @@ export function ProvidersTab({
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
+      </div>
+
+      {/* Multi-Provider Pool Status & Cloud Save Banner */}
+      <div className="p-4 rounded-xl bg-[#161b22] border border-[#30363d] space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center space-x-2.5">
+            <div
+              className={`w-3 h-3 rounded-full shrink-0 ${
+                DEFAULT_PROVIDERS.filter((p) => Boolean(keys[p.id]?.trim()) || Boolean(envConfigured[p.id])).length > 0
+                  ? 'bg-emerald-400 animate-pulse'
+                  : 'bg-slate-500'
+              }`}
+            />
+            <div>
+              <div className="text-xs font-bold text-white flex items-center space-x-2">
+                <span>Multi-Provider Active Pool:</span>
+                <span className="text-cyan-300 font-mono">
+                  {DEFAULT_PROVIDERS.filter((p) => Boolean(keys[p.id]?.trim()) || Boolean(envConfigured[p.id])).length} Provider Aktif Sekaligus
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {DEFAULT_PROVIDERS.filter((p) => Boolean(keys[p.id]?.trim()) || Boolean(envConfigured[p.id])).length > 0
+                  ? `Siap auto-failover & balancing: ${DEFAULT_PROVIDERS.filter(
+                      (p) => Boolean(keys[p.id]?.trim()) || Boolean(envConfigured[p.id])
+                    )
+                      .map((p) => p.name)
+                      .join(', ')}`
+                  : 'Masukkan API key provider di bawah, lalu klik "Simpan Semua Keys" untuk mengaktifkan pool multi-provider!'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleSaveAllToCloud}
+            disabled={savingAllKeys}
+            className="shrink-0 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/25 transition disabled:opacity-50 flex items-center space-x-1.5"
+          >
+            <Check className="w-3.5 h-3.5" />
+            <span>{savingAllKeys ? 'Menyimpan ke Cloud...' : 'Simpan Semua Keys ke Cloud DB'}</span>
+          </button>
+        </div>
+
+        {saveAllMsg && (
+          <div className="p-2.5 rounded-lg bg-emerald-950/70 border border-emerald-700 text-emerald-200 text-xs flex items-center space-x-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{saveAllMsg}</span>
+          </div>
+        )}
       </div>
 
       {/* Gateway Master Key Card */}

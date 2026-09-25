@@ -274,55 +274,91 @@ export const DEFAULT_FALLBACK_GROUPS: ModelFallbackGroup[] = [
   },
 ];
 
+// In-memory runtime store for server-saved provider keys
+let runtimeStoredKeys: Record<string, string> = {};
+let runtimeStoredBaseUrls: Record<string, string> = {};
+let runtimeCfAccountId: string = '';
+
+export function setRuntimeStoredKeys(keys: Record<string, string>) {
+  runtimeStoredKeys = { ...runtimeStoredKeys, ...keys };
+}
+
+export function setRuntimeStoredBaseUrls(urls: Record<string, string>) {
+  runtimeStoredBaseUrls = { ...runtimeStoredBaseUrls, ...urls };
+}
+
+export function setRuntimeCfAccountId(accId: string) {
+  runtimeCfAccountId = accId;
+}
+
+export function getRuntimeStoredKeys(): Record<string, string> {
+  return { ...runtimeStoredKeys };
+}
+
+export function getRuntimeStoredBaseUrls(): Record<string, string> {
+  return { ...runtimeStoredBaseUrls };
+}
+
+export function getRuntimeCfAccountId(): string {
+  return runtimeCfAccountId;
+}
+
 /**
- * Resolve provider API Key from environment or request headers
+ * Resolve provider API Key from environment, database runtime store, or request headers
  */
 export function getProviderApiKey(
   providerId: ProviderId,
   headerKeys: Record<string, string> = {}
 ): string | undefined {
-  // 1. Check direct client header first (e.g. x-anthropic-key)
+  // 1. Check direct client header first (e.g. x-deepseek-key)
   const headerKey = headerKeys[`x-${providerId}-key`];
   if (headerKey && headerKey.trim()) return headerKey.trim();
 
-  // 2. Check JSON dictionary header (x-provider-keys: {"openai": "sk-..."})
+  // 2. Check JSON dictionary header (x-provider-keys: {"deepseek": "sk-..."})
   if (headerKeys['x-provider-keys']) {
     try {
       const parsed = JSON.parse(headerKeys['x-provider-keys']);
-      if (parsed[providerId]) return parsed[providerId];
+      if (parsed[providerId] && String(parsed[providerId]).trim()) {
+        return String(parsed[providerId]).trim();
+      }
     } catch {
       // ignore invalid json
     }
   }
 
-  // 3. Fallback to process.env (Vercel / Netlify environment variables)
+  // 3. Check server-side stored keys (from MongoDB / Supabase / .data)
+  if (runtimeStoredKeys[providerId] && runtimeStoredKeys[providerId].trim()) {
+    return runtimeStoredKeys[providerId].trim();
+  }
+
+  // 4. Fallback to process.env (Vercel / Netlify environment variables)
   switch (providerId) {
     case 'openai':
-      return process.env.OPENAI_API_KEY;
+      return (process.env.OPENAI_API_KEY || '').trim() || undefined;
     case 'anthropic':
-      return process.env.ANTHROPIC_API_KEY;
+      return (process.env.ANTHROPIC_API_KEY || '').trim() || undefined;
     case 'gemini':
-      return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      return (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim() || undefined;
     case 'deepseek':
-      return process.env.DEEPSEEK_API_KEY;
+      return (process.env.DEEPSEEK_API_KEY || '').trim() || undefined;
     case 'groq':
-      return process.env.GROQ_API_KEY;
+      return (process.env.GROQ_API_KEY || '').trim() || undefined;
     case 'openrouter':
-      return process.env.OPENROUTER_API_KEY;
+      return (process.env.OPENROUTER_API_KEY || '').trim() || undefined;
     case 'mistral':
-      return process.env.MISTRAL_API_KEY;
+      return (process.env.MISTRAL_API_KEY || '').trim() || undefined;
     case 'together':
-      return process.env.TOGETHER_API_KEY;
+      return (process.env.TOGETHER_API_KEY || '').trim() || undefined;
     case 'cloudflare':
-      return process.env.CLOUDFLARE_API_KEY || process.env.CLOUDFLARE_API_TOKEN;
+      return (process.env.CLOUDFLARE_API_KEY || process.env.CLOUDFLARE_API_TOKEN || '').trim() || undefined;
     case 'cerebras':
-      return process.env.CEREBRAS_API_KEY;
+      return (process.env.CEREBRAS_API_KEY || '').trim() || undefined;
     case 'siliconflow':
-      return process.env.SILICONFLOW_API_KEY;
+      return (process.env.SILICONFLOW_API_KEY || '').trim() || undefined;
     case 'perplexity':
-      return process.env.PERPLEXITY_API_KEY;
+      return (process.env.PERPLEXITY_API_KEY || '').trim() || undefined;
     case 'custom':
-      return process.env.CUSTOM_API_KEY;
+      return (process.env.CUSTOM_API_KEY || '').trim() || undefined;
     default:
       return undefined;
   }
@@ -331,7 +367,11 @@ export function getProviderApiKey(
 export function getCloudflareAccountId(
   headerKeys: Record<string, string> = {}
 ): string | undefined {
-  return headerKeys['x-cloudflare-account-id'] || process.env.CLOUDFLARE_ACCOUNT_ID;
+  return (
+    headerKeys['x-cloudflare-account-id'] ||
+    runtimeCfAccountId ||
+    process.env.CLOUDFLARE_ACCOUNT_ID
+  );
 }
 
 export function getProviderBaseUrl(
@@ -340,6 +380,9 @@ export function getProviderBaseUrl(
 ): string {
   if (headerKeys[`x-${providerId}-base-url`]) {
     return headerKeys[`x-${providerId}-base-url`];
+  }
+  if (runtimeStoredBaseUrls[providerId] && runtimeStoredBaseUrls[providerId].trim()) {
+    return runtimeStoredBaseUrls[providerId].trim();
   }
   if (providerId === 'cloudflare') {
     const accId = getCloudflareAccountId(headerKeys) || '{account_id}';
@@ -355,3 +398,4 @@ export function getProviderBaseUrl(
 export function getGatewaySecret(): string | undefined {
   return process.env.ROUTER_API_KEY || process.env.GATEWAY_SECRET;
 }
+
