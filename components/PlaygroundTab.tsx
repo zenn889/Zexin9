@@ -146,6 +146,7 @@ export function PlaygroundTab({
       const res = await fetch('/v1/chat/completions', {
         method: 'POST',
         headers,
+        credentials: 'include',
         body: JSON.stringify({
           model: selectedModel,
           messages: apiMessages,
@@ -181,37 +182,45 @@ export function PlaygroundTab({
         return;
       }
 
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
+      const contentType = res.headers.get('content-type') || '';
       let accumulatedText = '';
-      let chunkCount = 0;
 
-      if (reader) {
-        let buffer = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+      if (contentType.includes('application/json')) {
+        const json = await res.json().catch(() => null);
+        accumulatedText = json?.choices?.[0]?.message?.content || json?.choices?.[0]?.text || '';
+        setCurrentResponse(accumulatedText);
+      } else {
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
+        if (reader) {
+          let buffer = '';
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith('data:')) continue;
-            const dataStr = trimmed.slice(5).trim();
-            if (dataStr === '[DONE]') continue;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
 
-            try {
-              const chunk = JSON.parse(dataStr);
-              const delta = chunk.choices?.[0]?.delta?.content;
-              if (delta) {
-                accumulatedText += delta;
-                chunkCount++;
-                setCurrentResponse(accumulatedText);
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed.startsWith('data:')) continue;
+              const dataStr = trimmed.slice(5).trim();
+              if (dataStr === '[DONE]') continue;
+
+              try {
+                const chunk = JSON.parse(dataStr);
+                const delta =
+                  chunk.choices?.[0]?.delta?.content ||
+                  chunk.choices?.[0]?.delta?.reasoning_content;
+                if (delta) {
+                  accumulatedText += delta;
+                  setCurrentResponse(accumulatedText);
+                }
+              } catch {
+                // Ignore parse errors
               }
-            } catch {
-              // Ignore parse errors
             }
           }
         }

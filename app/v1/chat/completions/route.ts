@@ -24,10 +24,19 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // 1. Gateway Authentication Check (via master key or client token in db)
+    // 1. Gateway Authentication Check (via master key, client token, or web session cookie)
     const authHeader = req.headers.get('authorization') || '';
     const xApiKey = req.headers.get('x-api-key') || '';
-    const clientToken = authHeader.replace(/^Bearer\s+/i, '').trim() || xApiKey.trim();
+    let clientToken = authHeader.replace(/^Bearer\s+/i, '').trim() || xApiKey.trim();
+
+    // Support browser session cookie so web Playground is always authenticated
+    if (!clientToken) {
+      const cookieHeader = req.headers.get('cookie') || '';
+      const match = cookieHeader.match(/9router_session=([^;]+)/);
+      if (match) {
+        clientToken = decodeURIComponent(match[1]).trim();
+      }
+    }
 
     const gatewaySecret = getGatewaySecret() || db.getMasterKey();
     const hasSecretConfigured = Boolean(gatewaySecret && gatewaySecret.trim().length > 0);
@@ -117,6 +126,10 @@ export async function POST(req: NextRequest) {
     responseHeaders.set('x-router-model', result.servedModel);
     responseHeaders.set('x-router-fallback-count', String(result.fallbackCount));
     responseHeaders.set('x-router-tokens-saved', String(result.tokensSaved));
+
+    // Strip upstream compression headers because Node.js fetch already decompresses the stream!
+    responseHeaders.delete('content-encoding');
+    responseHeaders.delete('content-length');
 
     return new Response(result.response.body, {
       status: result.response.status,

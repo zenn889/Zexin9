@@ -11,7 +11,8 @@ export async function callOpenAICompatible(
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${apiKey}`,
+    Authorization: `Bearer ${apiKey.trim()}`,
+    Accept: request.stream ? 'text/event-stream' : 'application/json',
   };
 
   // OpenRouter requires HTTP-Referer and X-Title headers

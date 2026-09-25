@@ -742,18 +742,18 @@ export const db = {
     cfAccountId: string = ''
   ) {
     loadData();
-    // Clean and update keys
-    const cleanKeys: Record<string, string> = { ...memoryProviderKeys };
+    // Clean and update keys (only keep non-empty trimmed keys)
+    const cleanKeys: Record<string, string> = {};
     Object.entries(keys).forEach(([pId, kVal]) => {
-      if (typeof kVal === 'string') {
+      if (typeof kVal === 'string' && kVal.trim().length > 0) {
         cleanKeys[pId] = kVal.trim();
       }
     });
     memoryProviderKeys = cleanKeys;
 
-    const cleanUrls: Record<string, string> = { ...memoryProviderBaseUrls };
+    const cleanUrls: Record<string, string> = {};
     Object.entries(baseUrls).forEach(([pId, uVal]) => {
-      if (typeof uVal === 'string') {
+      if (typeof uVal === 'string' && uVal.trim().length > 0) {
         cleanUrls[pId] = uVal.trim();
       }
     });

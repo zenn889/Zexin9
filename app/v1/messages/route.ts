@@ -25,10 +25,18 @@ export async function POST(req: NextRequest) {
 
   try {
     const gatewaySecret = getGatewaySecret() || db.getMasterKey();
-    const clientKey =
+    let clientKey =
       req.headers.get('x-api-key') ||
       req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||
       '';
+
+    if (!clientKey) {
+      const cookieHeader = req.headers.get('cookie') || '';
+      const match = cookieHeader.match(/9router_session=([^;]+)/);
+      if (match) {
+        clientKey = decodeURIComponent(match[1]).trim();
+      }
+    }
 
     const hasSecretConfigured = Boolean(gatewaySecret && gatewaySecret.trim().length > 0);
 
@@ -113,6 +121,10 @@ export async function POST(req: NextRequest) {
     Object.entries(CORS_HEADERS).forEach(([k, v]) => responseHeaders.set(k, v));
     responseHeaders.set('x-router-provider', result.servedBy);
     responseHeaders.set('x-router-model', result.servedModel);
+
+    // Strip compression headers so client decoder does not fail
+    responseHeaders.delete('content-encoding');
+    responseHeaders.delete('content-length');
 
     return new Response(result.response.body, {
       status: result.response.status,
