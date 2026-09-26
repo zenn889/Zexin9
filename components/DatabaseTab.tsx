@@ -29,6 +29,7 @@ interface DatabaseStatus {
     host: string;
     databaseName: string;
     uriMasked: string;
+    error?: string;
   };
   supabase: {
     configured: boolean;
@@ -36,6 +37,7 @@ interface DatabaseStatus {
     url: string;
     table: string;
     tableStatus: string;
+    error?: string;
   };
   redis: {
     configured: boolean;
@@ -394,6 +396,22 @@ ROUTER_API_KEY=master_password_anda`;
               ? `Table: ${status.supabase.table}`
               : 'Standby / Local Storage'}
           </p>
+          {status?.activeEngine === 'local' &&
+            (status.mongodb.configured || status.supabase.configured || status.redis.configured) && (
+              <p className="text-[10px] font-mono mt-2 text-rose-300 break-words leading-relaxed">
+                ⚠️{' '}
+                {status.mongodb.configured
+                  ? `MongoDB terdeteksi di env (db: ${status.mongodb.databaseName}) tapi KONEKSI GAGAL.`
+                  : status.supabase.configured
+                  ? 'Supabase terdeteksi di env tapi koneksi gagal.'
+                  : 'Redis/KV terdeteksi di env.'}
+                {status.mongodb.configured && status.mongodb.error
+                  ? ` Pesan server: ${status.mongodb.error.slice(0, 220)}`
+                  : status.supabase.error
+                  ? ` Pesan server: ${status.supabase.error.slice(0, 220)}`
+                  : ' Cek: sudah redeploy setelah mengisi env? IP Atlas sudah 0.0.0.0/0? Password & nama variabel sudah benar?'}
+              </p>
+            )}
         </div>
 
         {/* Synced Logs Card */}

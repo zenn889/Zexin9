@@ -170,6 +170,8 @@ export function ProvidersTab({
     build?: string;
     mongoEnvPresent?: boolean;
     mongoUriValid?: boolean;
+    connectionOk?: boolean;
+    connectionError?: string;
   } | null>(null);
   const [serverSaveError, setServerSaveError] = useState<string | null>(null);
   const [newAccProvider, setNewAccProvider] = useState<ProviderId>('custom');
@@ -1130,6 +1132,12 @@ export function ProvidersTab({
                   <span className="px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-300 break-words">
                     ⚠️ Env MONGODB_URI terisi, tapi nilainya bukan URI MongoDB (harus diawali <code>mongodb+srv://</code>).
                     Cek Environment Variables — mungkin ketuker dengan MONGODB_DB / Database Name.
+                  </span>
+                ) : serverPersistence && serverPersistence.engine !== 'local' && serverPersistence.connectionOk === false ? (
+                  <span className="px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-300 break-words">
+                    ⚠️ {serverPersistence.engine} dikonfigurasi, tapi KONEKSI GAGAL
+                    {serverPersistence.connectionError ? `: ${String(serverPersistence.connectionError).slice(0, 170)}` : ''}
+                    {' '}— buka tab Database untuk tes ulang (cek IP whitelist Atlas 0.0.0.0/0, password, dan pastikan sudah redeploy).
                   </span>
                 ) : serverPersistence ? (
                   <span

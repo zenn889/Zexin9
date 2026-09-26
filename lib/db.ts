@@ -74,6 +74,22 @@ let lastCloudPullAt = 0;
 // an empty list (the "all providers: Belum ada akun/key" bug).
 let configHydrated = false;
 
+// Last database connection check result (filled by getDatabaseStatus), so
+// cheap sync callers like getPersistenceSummary can report connection health.
+let lastConnectionCheck:
+  | {
+      at: number;
+      activeEngine: 'mongodb' | 'supabase' | 'redis' | 'local';
+      mongoConfigured: boolean;
+      mongoConnected: boolean;
+      mongoError?: string;
+      supabaseConfigured: boolean;
+      supabaseConnected: boolean;
+      supabaseError?: string;
+      redisConfigured: boolean;
+    }
+  | null = null;
+
 // Determine writable data directory location
 function getDataDir(): string {
   if (process.env.VERCEL || process.env.NETLIFY) {
@@ -238,6 +254,8 @@ function loadData() {
 }
 
 // --- MongoDB Integration ---
+let lastMongoConnectError = '';
+
 function getEffectiveMongoUri(): string | undefined {
   return (
     cleanEnv(process.env.MONGODB_URI) ||
@@ -281,6 +299,9 @@ async function getMongoDb(): Promise<Db | null> {
     cachedMongoDb = client.db(getEffectiveMongoDbName());
     return cachedMongoDb;
   } catch (err) {
+    // Keep the message: it is shown in the dashboard's database status so setup
+    // problems (IP whitelist, wrong password) are visible without server logs.
+    lastMongoConnectError = err instanceof Error ? err.message : String(err);
     console.error('MongoDB connection error:', err);
     return null;
   }
@@ -881,6 +902,23 @@ export const db = {
     const dataDir = getDataDir();
     const serverlessEnv = Boolean(process.env.VERCEL || process.env.NETLIFY);
     const persistent = engine !== 'local' || !serverlessEnv;
+    // Connection health from the last getDatabaseStatus() run (the Database tab
+    // and the dashboard trigger it). Lets the Providers status chip show
+    // "configured but the connection actually fails" instead of a green light.
+    const conn = lastConnectionCheck;
+    let connectionOk: boolean | undefined;
+    let connectionError: string | undefined;
+    if (conn && engine !== 'local') {
+      if (engine === 'mongodb') {
+        connectionOk = conn.mongoConnected;
+        connectionError = conn.mongoError;
+      } else if (engine === 'supabase') {
+        connectionOk = conn.supabaseConnected;
+        connectionError = conn.supabaseError;
+      } else if (engine === 'redis') {
+        connectionOk = true; // presence-based engine
+      }
+    }
     const buildSha = (process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_COMMIT || '').trim();
     return {
       engine,
@@ -890,6 +928,9 @@ export const db = {
       build: buildSha ? buildSha.slice(0, 7) : 'lokal/dev',
       mongoEnvPresent,
       mongoUriValid,
+      connectionOk,
+      connectionError,
+      connectionCheckedAt: lastConnectionCheck?.at,
       accountsCount: memoryProviderAccounts.length,
       cfAccountsCount: memoryCfAccounts.length,
       keysCount: Object.values(memoryProviderKeys).filter((v) => String(v || '').trim().length > 0).length,
@@ -908,8 +949,10 @@ export const db = {
     let activeEngine: 'mongodb' | 'supabase' | 'redis' | 'local' = 'local';
     let mongoConnected = false;
     let mongoHost = '';
+    let mongoError = '';
     let supabaseConnected = false;
     let supabaseTableStatus = 'unknown';
+    let supabaseError = '';
 
     // Test MongoDB if configured
     if (mongoUri) {
@@ -921,9 +964,12 @@ export const db = {
           await mdb.command({ ping: 1 });
           mongoConnected = true;
           activeEngine = 'mongodb';
+        } else {
+          mongoError = lastMongoConnectError || 'Tidak bisa terhubung ke MongoDB.';
         }
-      } catch {
+      } catch (err) {
         mongoConnected = false;
+        mongoError = err instanceof Error ? err.message : String(err);
       }
     }
 
@@ -945,16 +991,30 @@ export const db = {
           } else {
             supabaseConnected = false;
             supabaseTableStatus = error.message;
+            supabaseError = error.message;
           }
         }
-      } catch {
+      } catch (err) {
         supabaseConnected = false;
+        supabaseError = err instanceof Error ? err.message : String(err);
       }
     }
 
     if (activeEngine === 'local' && redisUrl) {
       activeEngine = 'redis';
     }
+
+    lastConnectionCheck = {
+      at: Date.now(),
+      activeEngine,
+      mongoConfigured: Boolean(mongoUri),
+      mongoConnected,
+      mongoError: mongoError || undefined,
+      supabaseConfigured: Boolean(supabaseUrl),
+      supabaseConnected,
+      supabaseError: supabaseError || undefined,
+      redisConfigured: Boolean(redisUrl),
+    };
 
     return {
       activeEngine,
@@ -964,6 +1024,7 @@ export const db = {
         host: mongoHost,
         databaseName: getEffectiveMongoDbName(),
         uriMasked: mongoUri ? mongoUri.replace(/:([^@]+)@/, ':****@') : '',
+        error: mongoError,
       },
       supabase: {
         configured: Boolean(supabaseUrl),
@@ -971,6 +1032,7 @@ export const db = {
         url: supabaseUrl || '',
         table: getEffectiveSupabaseTable(),
         tableStatus: supabaseTableStatus,
+        error: supabaseError,
       },
       redis: {
         configured: Boolean(redisUrl),

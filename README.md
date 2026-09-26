@@ -28,8 +28,9 @@
    - Tes latency (Ping) real-time untuk setiap provider.
    - Interactive Playground / Web Chat dengan streaming SSE.
    - Gateway Master Key untuk melindungi URL publik Anda.
-6. **100% Serverless & Zero Database**
-   - Tidak memerlukan VPS, database eksternal, atau biaya bulanan. Berjalan di atas Vercel Serverless Functions / Netlify Functions dengan streaming SSE.
+6. **100% Serverless — Database Cloud Opsional (Sangat Disarankan)**
+   - Tidak memerlukan VPS; berjalan di atas Vercel Serverless Functions / Netlify Functions dengan streaming SSE.
+   - Tanpa database, pengaturan (akun/API key) hanya bertahan selama server hidup — di Vercel penyimpanan server bersifat sementara dan **hilang saat redeploy/restart**. Hubungkan **MongoDB Atlas / Supabase / Upstash (Vercel KV)** agar akun, token, dan log tersimpan permanen (semua ada paket gratisnya). Panduan langkah demi langkah ada di bawah.
 
 ---
 
@@ -130,6 +131,75 @@ claude
 
 ---
 
+## 🗄️ Menghubungkan Database (MongoDB / Supabase / Upstash)
+
+Tanpa database, akun & API key tersimpan di penyimpanan sementara server (di Vercel: **hilang setiap restart/redeploy**). Pilih salah satu opsi di bawah — semuanya ada paket gratis.
+
+### Aturan umum (berlaku untuk semua opsi)
+
+1. Isi Environment Variables **di tempat kamu hosting** (Vercel: Project → Settings → Environment Variables). Pilih environment **Production** — atau centang Production + Preview + Development sekaligus.
+2. Setelah menambah/mengubah env: **Redeploy**. Env baru hanya aktif di deployment baru.
+3. Nilai jangan diberi tanda kutip dan jangan ada spasi di ujung (kalau pun ada, gateway otomatis membersihkannya — tapi lebih baik bersih).
+4. Verifikasi di dashboard:
+   - Tab **Database** → kartu **ACTIVE ENGINE** harus berubah dari "📁 Local JSON / Memory" menjadi **🍃 MongoDB Atlas** (atau Supabase/Upstash). Jika env terdeteksi tapi koneksi gagal, pesan error server tampil langsung di kartu itu.
+   - Tab **Providers** → chip di bawah judul "9Router Multi-Account Connections Pool" harus hijau: `penyimpanan: mongodb (database — permanen)`.
+
+### Opsi 1 — MongoDB Atlas (paling mudah, gratis M0)
+
+1. Daftar gratis di [mongodb.com/cloud/atlas/register](https://www.mongodb.com/cloud/atlas/register).
+2. Buat **Cluster** → pilih **M0 (Free)** → Create Deployment.
+3. **Database Access** → *Add New Database User* → isi username + password. Hindari karakter `@ # : /` di password (atau nanti harus di-encode, mis. `@` → `%40`).
+4. **Network Access** → *Add IP Address* → pilih **Allow Access from Anywhere** (`0.0.0.0/0`). Wajib untuk Vercel/Netlify karena IP-nya berubah-ubah.
+5. Klik **Connect** → **Drivers** → copy connection string-nya:
+   `mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority`
+   Ganti `<username>` / `<password>` dengan milikmu (boleh sekalian tulis nama database sebelum `?`: `.../zexin9?retryWrites=...`).
+6. Di Vercel → Settings → **Environment Variables**, tambahkan:
+   - `MONGODB_URI` = string lengkap dari langkah 5
+   - `MONGODB_DB` = `zexin9` *(opsional — nama database di dalam cluster)*
+7. **Redeploy**. Buka tab Database → ACTIVE ENGINE harus jadi 🍃 MongoDB Atlas.
+
+### Opsi 2 — Supabase (PostgreSQL cloud, gratis)
+
+1. Daftar di [supabase.com](https://supabase.com) → **New project** (gratis).
+2. **Project Settings → API** → copy **Project URL** dan **service_role key**.
+3. Buka **SQL Editor**, jalankan:
+
+   ```sql
+   create table if not exists zexin9_state (
+     id text primary key,
+     data jsonb,
+     updated_at timestamptz default now()
+   );
+   ```
+
+4. Environment Variables: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_TABLE=zexin9_state`.
+5. **Redeploy** → cek tab Database.
+
+### Opsi 3 — Upstash Redis / Vercel KV
+
+1. Di Vercel: **Storage → Create Database → KV (Upstash)** → Connect ke project-mu. Vercel otomatis menambahkan `KV_REST_API_URL` dan `KV_REST_API_TOKEN`.
+2. Atau daftar di [upstash.com](https://upstash.com) → buat Redis → copy **REST URL** + **REST TOKEN** ke env `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`.
+3. **Redeploy** → cek tab Database.
+
+### Menguji koneksi tanpa commit apa pun
+
+Di tab **Database → MongoDB**, tempel connection string-mu di kolom *MongoDB Connection URI* lalu klik **Test Koneksi MongoDB**. Itu menguji dari sisi server (tidak menyimpan apa pun).
+
+### Masih "Local JSON / Memory" padahal env sudah diisi?
+
+Periksa berurutan — 90% kasus ada di 3 poin pertama:
+
+1. **Belum redeploy** setelah menambah env (paling sering!). Env hanya berlaku di deployment baru.
+2. Env dipasang di environment **Preview** saja, bukan **Production**.
+3. Nama variabel salah ketik / huruf kecil — harus **PERSIS**: `MONGODB_URI`, `MONGODB_DB`.
+4. **IP Atlas belum di-whitelist** → Network Access harus `0.0.0.0/0`.
+5. Password di URI salah atau mengandung karakter khusus yang belum di-encode.
+6. Nilai **ketuker** (mis. nama database `zexin9` tertulis di `MONGODB_URI`) — dashboard akan menampilkan peringatan kuning khusus untuk kasus ini.
+
+Pesan error detail koneksinya sekarang tampil di kartu **ACTIVE ENGINE** (tab Database).
+
+---
+
 ## 📋 Daftar Environment Variables
 
 | Variabel | Keterangan | Wajib? |
@@ -143,6 +213,12 @@ claude
 | `OPENROUTER_API_KEY`| OpenRouter API Key | Opsional |
 | `MISTRAL_API_KEY` | Mistral AI API Key | Opsional |
 | `TOGETHER_API_KEY` | Together AI API Key | Opsional |
+| `MONGODB_URI` | Connection string MongoDB Atlas — menyimpan akun/token/log **permanen** | Opsional (sangat disarankan) |
+| `MONGODB_DB` | Nama database di dalam cluster Atlas (default `zexin9`) | Opsional |
+| `SUPABASE_URL` | URL project Supabase (alternatif MongoDB) | Opsional |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key Supabase | Opsional |
+| `SUPABASE_TABLE` | Nama tabel state Supabase (default `zexin9_state`) | Opsional |
+| `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Upstash Redis / Vercel KV (alternatif MongoDB) | Opsional |
 
 ---
 
