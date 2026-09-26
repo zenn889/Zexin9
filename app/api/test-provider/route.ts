@@ -2,7 +2,7 @@ import { executeProviderCall } from '@/lib/router';
 import { db } from '@/lib/db';
 import { ChatCompletionRequest, ProviderAccount, ProviderId } from '@/lib/types';
 import { requireAuth } from '@/lib/auth';
-import { getProviderApiKey, getProviderBaseUrl, getEffectiveProviderAccounts } from '@/lib/config';
+import { getProviderApiKey, getProviderBaseUrl, getEffectiveProviderAccounts, getCloudflareApiBase } from '@/lib/config';
 import { buildModelsUrl } from '@/lib/adapters/openai-compatible';
 import { NextRequest } from 'next/server';
 
@@ -108,6 +108,41 @@ async function runChatAttempt(
   }
 }
 
+/**
+ * Cloudflare Workers AI has no OpenAI-style /models listing — the account's
+ * model catalog comes from the models/search endpoint. Used so a CF account can
+ * discover the full set of models available to it.
+ */
+async function discoverCloudflareModels(apiKey: string, accountId: string): Promise<string[]> {
+  const accId = String(accountId || '').trim();
+  if (!accId) return [];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DISCOVERY_TIMEOUT_MS);
+  try {
+    const url = `${getCloudflareApiBase()}/accounts/${accId}/ai/models/search?per_page=200`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${String(apiKey || '').trim()}` },
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+    if (!res.ok) return [];
+    const data = await res.json().catch(() => null);
+    const list = Array.isArray(data?.result) ? data.result : [];
+    const names = list
+      .filter((m: any) => {
+        const task = String(m?.task?.name || m?.task || '').toLowerCase();
+        return !task || task.includes('text generation');
+      })
+      .map((m: any) => String(m?.name || '').trim())
+      .filter((n: string) => n.startsWith('@cf/'));
+    return Array.from(new Set<string>(names)).slice(0, 60);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Fetches the model list from an OpenAI-compatible endpoint (best effort). */
 async function discoverModels(baseUrl: string, apiKey: string): Promise<string[]> {
   if (!baseUrl) return [];
@@ -154,7 +189,6 @@ function persistDetectionToAccounts(
 ) {
   try {
     const accounts = db.getProviderAccounts();
-    if (accounts.length === 0) return;
     const wantedId = (body.accountId || '').trim();
     const wantedUrl = (body.baseUrl || '').trim().replace(/\/+$/, '');
     const wantedKey = (body.apiKey || '').trim();
@@ -189,6 +223,44 @@ function persistDetectionToAccounts(
       return next;
     });
     if (changed) db.saveProviderAccounts(updated);
+
+    // Cloudflare pool accounts are a separate list — persist the discovered
+    // catalog there too so the Playground/dashboard can show the full model set.
+    if (providerId === 'cloudflare') {
+      const settings = db.getProviderSettings();
+      const cfAccounts = Array.isArray(settings.cfAccounts) ? settings.cfAccounts : [];
+      if (cfAccounts.length > 0) {
+        let cfChanged = false;
+        const updatedCf = cfAccounts.map((cf) => {
+          const matchesCf =
+            (wantedId && cf.id === wantedId) ||
+            (Boolean(body.accountId) && cf.accountId === String(body.accountId).trim()) ||
+            (wantedKey && cf.apiToken === wantedKey);
+          if (!matchesCf) return cf;
+          const detected = new Set<string>([...(cf.detectedModels || []), ...modelsFound]);
+          const verified = new Set<string>(cf.verifiedModels || []);
+          modelStatuses
+            .filter((s) => s.ok && s.model)
+            .forEach((s) => verified.add(s.model));
+          cfChanged = true;
+          return {
+            ...cf,
+            detectedModels: Array.from(detected),
+            ...(verified.size > 0 ? { verifiedModels: Array.from(verified) } : {}),
+            lastTested: new Date().toISOString(),
+          };
+        });
+        if (cfChanged) {
+          db.setProviderSettings(
+            settings.keys,
+            settings.baseUrls,
+            settings.cfAccountId,
+            updatedCf,
+            settings.providerAccounts
+          );
+        }
+      }
+    }
   } catch {
     // best-effort: never fail the provider test because of a persistence hiccup
   }
@@ -261,13 +333,15 @@ export async function POST(req: NextRequest) {
     // 3. Auto-discover models from the endpoint's /models listing. This is what
     //    makes custom providers / resellers work without knowing model names up
     //    front: the ping retries with the first models the endpoint reports.
+    //    Cloudflare always refreshes its catalog (models/search) so CF accounts
+    //    expose every Workers AI model the account can use.
     const prev = getLast();
-    const mayDiscover =
-      !usedModel &&
-      (isCustom || !requestedModel) &&
-      (!prev || looksLikeModelError(prev.status, prev.errorText));
+    const discoveryAllowed =
+      isCustom ||
+      providerId === 'cloudflare' ||
+      (!requestedModel && (!prev || looksLikeModelError(prev.status, prev.errorText)));
 
-    if (mayDiscover) {
+    if (discoveryAllowed) {
       const effectiveKey = getProviderApiKey(providerId, headerKeys) || '';
       // Prefer the endpoint configured on a connected account — the "Provider
       // Accounts" form stores the base URL on the account itself, not in the
@@ -278,19 +352,31 @@ export async function POST(req: NextRequest) {
         .find((u) => u.length > 0 && !u.includes('{'));
       const effectiveBaseUrl =
         requestedBaseUrl || accountBaseUrl || getProviderBaseUrl(providerId, headerKeys);
-      modelsFound = await discoverModels(effectiveBaseUrl, effectiveKey);
+      let discovered: string[] = [];
+      if (providerId === 'cloudflare') {
+        discovered = await discoverCloudflareModels(effectiveKey, String(accountId || ''));
+      }
+      if (discovered.length === 0) {
+        discovered = await discoverModels(effectiveBaseUrl, effectiveKey);
+      }
+      modelsFound = discovered;
 
-      for (const cand of modelsFound) {
-        if (tried.length >= MAX_CHAT_ATTEMPTS) break;
-        if (cand === requestedModel) continue;
-        const r = await attempt(cand);
-        if (r.ok) {
-          usedModel = cand;
-          usedAttempt = r;
-          break;
+      // Attempt the discovered models only when there is no working model yet —
+      // for Cloudflare we want the full catalog listed even when the default
+      // model already answered, without burning a request per model.
+      if (!usedModel) {
+        for (const cand of modelsFound) {
+          if (tried.length >= MAX_CHAT_ATTEMPTS) break;
+          if (cand === requestedModel) continue;
+          const r = await attempt(cand);
+          if (r.ok) {
+            usedModel = cand;
+            usedAttempt = r;
+            break;
+          }
+          // Stop burning requests when the failure is not model-related (auth, network, ...)
+          if (!looksLikeModelError(r.status, r.errorText)) break;
         }
-        // Stop burning requests when the failure is not model-related (auth, network, ...)
-        if (!looksLikeModelError(r.status, r.errorText)) break;
       }
     }
 

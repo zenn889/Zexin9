@@ -257,6 +257,30 @@ export function PlaygroundTab({
         });
         verifiedByProvider[pid] = vlist;
       });
+      // Cloudflare pool accounts keep their own list — surface those models
+      // under the cloudflare provider so they are selectable in the dropdown.
+      const cfPool: Array<{
+        enabled?: boolean;
+        detectedModels?: string[];
+        verifiedModels?: string[];
+      }> = Array.isArray(data?.cfAccounts) ? data.cfAccounts : [];
+      cfPool.forEach((acc) => {
+        if (!acc || acc.enabled === false) return;
+        const pid = 'cloudflare';
+        const list = detectedByProvider[pid] || [];
+        [...(acc.verifiedModels || []), ...(acc.detectedModels || [])].forEach((m) => {
+          const mm = String(m || '').trim();
+          if (mm && !list.includes(mm)) list.push(mm);
+        });
+        detectedByProvider[pid] = list;
+        const vlist = verifiedByProvider[pid] || [];
+        (acc.verifiedModels || []).forEach((m) => {
+          const mm = String(m || '').trim();
+          if (mm && !vlist.includes(mm)) vlist.push(mm);
+        });
+        verifiedByProvider[pid] = vlist;
+      });
+
       setServerModels(detectedByProvider);
       setServerVerified(verifiedByProvider);
     } catch {

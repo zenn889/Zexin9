@@ -151,12 +151,27 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     enabled: true,
     priority: 9,
     models: [
+      // Text-generation catalog (updated from developers.cloudflare.com/workers-ai/models).
       '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
       '@cf/meta/llama-3.1-8b-instruct-fp8',
+      '@cf/meta/llama-3.2-3b-instruct',
+      '@cf/meta/llama-3.2-1b-instruct',
       '@cf/meta/llama-4-scout-17b-16e-instruct',
+      '@cf/deepseek-ai/deepseek-v4-flash-0731',
+      '@cf/deepseek-ai/deepseek-v4-pro-0813',
       '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',
+      '@cf/qwen/qwen3-30b-a3b-fp8',
       '@cf/qwen/qwen2.5-coder-32b-instruct',
-      '@cf/google/gemma-3-12b-it',
+      '@cf/qwen/qwq-32b',
+      '@cf/google/gemma-4-26b-a4b-it',
+      '@cf/mistralai/mistral-small-3.1-24b-instruct',
+      '@cf/zai-org/glm-5.3',
+      '@cf/zai-org/glm-4.7-flash',
+      '@cf/moonshotai/kimi-k2.7-code',
+      '@cf/moonshotai/kimi-k2.6',
+      '@cf/openai/gpt-oss-120b',
+      '@cf/openai/gpt-oss-20b',
+      '@cf/ibm-granite/granite-4.0-h-micro',
     ],
   },
   {
@@ -398,6 +413,16 @@ export function getCloudflareAccountId(
   );
 }
 
+/**
+ * Cloudflare API base URL. Overridable via CLOUDFLARE_API_BASE for testing or
+ * for accounts fronted by a Cloudflare-compatible proxy.
+ */
+export function getCloudflareApiBase(): string {
+  return (process.env.CLOUDFLARE_API_BASE || 'https://api.cloudflare.com/client/v4')
+    .trim()
+    .replace(/\/+$/, '');
+}
+
 export function getProviderBaseUrl(
   providerId: ProviderId,
   headerKeys: Record<string, string> = {}
@@ -410,7 +435,7 @@ export function getProviderBaseUrl(
   }
   if (providerId === 'cloudflare') {
     const accId = getCloudflareAccountId(headerKeys) || '{account_id}';
-    return `https://api.cloudflare.com/client/v4/accounts/${accId}/ai/v1`;
+    return `${getCloudflareApiBase()}/accounts/${accId}/ai/v1`;
   }
   if (providerId === 'custom' && process.env.CUSTOM_BASE_URL) {
     return process.env.CUSTOM_BASE_URL;
@@ -647,6 +672,10 @@ export function getEffectiveProviderAccounts(
           enabled: cf.enabled !== false,
           createdAt: cf.createdAt,
           lastUsedAt: cf.lastUsedAt,
+          // Preserve the model catalog discovered on the CF account so group
+          // requests (auto-smart) can use the account's own models.
+          ...(Array.isArray(cf.detectedModels) ? { detectedModels: cf.detectedModels.map(String) } : {}),
+          ...(Array.isArray(cf.verifiedModels) ? { verifiedModels: cf.verifiedModels.map(String) } : {}),
         });
       }
     });
@@ -665,7 +694,7 @@ export function getEffectiveProviderAccounts(
         if (p === 'cloudflare') {
           accountId = (getCloudflareAccountId(headerKeys) || '').trim() || undefined;
           if (accountId) {
-            baseUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1`;
+            baseUrl = `${getCloudflareApiBase()}/accounts/${accountId}/ai/v1`;
           }
         }
         accounts.push({

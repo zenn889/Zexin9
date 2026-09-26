@@ -67,7 +67,45 @@ export async function POST(req: Request) {
       providerAccounts = [],
     } = body;
 
-    db.setProviderSettings(keys, baseUrls, cfAccountId, cfAccounts, providerAccounts);
+    // A dashboard save must not wipe the model lists learned by "auto detect".
+    // Carry detected/verified models over from the stored accounts whenever the
+    // incoming copy does not explicitly carry them (e.g. the browser state that
+    // only knows key/baseUrl).
+    const keepDetection = <T extends Record<string, any>>(
+      incoming: T[],
+      existing: any[],
+      match: (a: T, e: any) => boolean
+    ): T[] =>
+      incoming.map((acc) => {
+        if (acc.detectedModels !== undefined || acc.verifiedModels !== undefined) return acc;
+        const prev = existing.find((e) => match(acc, e));
+        if (!prev) return acc;
+        return {
+          ...acc,
+          ...(prev.detectedModels ? { detectedModels: prev.detectedModels } : {}),
+          ...(prev.verifiedModels ? { verifiedModels: prev.verifiedModels } : {}),
+          ...(prev.lastDetectedAt ? { lastDetectedAt: prev.lastDetectedAt } : {}),
+          ...(prev.lastTested ? { lastTested: prev.lastTested } : {}),
+        };
+      });
+
+    const existingAccounts = db.getProviderAccounts();
+    const mergedProviderAccounts = Array.isArray(providerAccounts)
+      ? keepDetection(providerAccounts, existingAccounts, (a, e) =>
+          a.id === e.id ||
+          (a.provider === e.provider &&
+            ((a.baseUrl && a.baseUrl === e.baseUrl) || (a.apiKey && a.apiKey === e.apiKey)))
+        )
+      : providerAccounts;
+
+    const existingCfAccounts = db.getProviderSettings().cfAccounts || [];
+    const mergedCfAccounts = Array.isArray(cfAccounts)
+      ? keepDetection(cfAccounts, existingCfAccounts, (a, e) =>
+          a.id === e.id || (a.accountId && a.accountId === e.accountId)
+        )
+      : cfAccounts;
+
+    db.setProviderSettings(keys, baseUrls, cfAccountId, mergedCfAccounts, mergedProviderAccounts);
 
     const updated = db.getProviderSettings();
     const activeCount = Object.keys(updated.keys).filter((k) => updated.keys[k]?.trim()).length;

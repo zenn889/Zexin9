@@ -79,6 +79,10 @@ export interface CloudflareAccount {
   createdAt?: string;
   lastUsedAt?: string;
   lastTested?: string;
+  /** Models discovered from the Cloudflare models catalog on the last test. */
+  detectedModels?: string[];
+  /** Models that answered a live test. */
+  verifiedModels?: string[];
 }
 
 export interface ProviderAccount {

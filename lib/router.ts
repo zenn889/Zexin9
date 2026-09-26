@@ -8,6 +8,7 @@ import {
   getProviderBaseUrl,
   getEffectiveProviderAccounts,
   getCloudflareAccountId,
+  getCloudflareApiBase,
 } from './config';
 import { optimizeMessages } from './optimizer';
 import {
@@ -67,6 +68,13 @@ export function normalizeModelForProvider(provider: ProviderId, model: string): 
   }
 
   if (provider === 'cloudflare') {
+    // Workers AI models are addressed by their full @cf/... ids. Pass any
+    // explicit @cf/ model straight through — the old family mapping rewrote
+    // them (e.g. @cf/qwen/qwen3-30b-a3b-fp8 silently became qwen2.5-coder),
+    // so users could never actually use the model they picked.
+    if (mLower.startsWith('@cf/')) {
+      return model.trim();
+    }
     if (mLower.includes('r1') || mLower.includes('deepseek')) {
       return '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b';
     }
@@ -233,7 +241,8 @@ export function resolveCandidates(
       [...group.providers],
       requestedModel,
       headerKeys,
-      getCustomPreferredModels(headerKeys)
+      getCustomPreferredModels(headerKeys),
+      true
     );
   }
 
@@ -317,8 +326,20 @@ export function resolveCandidates(
  * real model name, so use the models detection verified/discovered instead.
  */
 function getCustomPreferredModels(headerKeys: Record<string, string> = {}): string[] {
+  return getAccountPreferredModels('custom', headerKeys);
+}
+
+/**
+ * The models a provider's connected accounts are known to serve: verified
+ * first, then detected. Used for virtual-group requests so the user's own
+ * accounts (custom endpoint, Cloudflare pool, …) are tried with real models.
+ */
+function getAccountPreferredModels(
+  providerId: ProviderId,
+  headerKeys: Record<string, string> = {}
+): string[] {
   const out: string[] = [];
-  const accounts = getEffectiveProviderAccounts('custom', headerKeys).filter(
+  const accounts = getEffectiveProviderAccounts(providerId, headerKeys).filter(
     (a) => a.enabled !== false
   );
   for (const acc of accounts) {
@@ -327,9 +348,9 @@ function getCustomPreferredModels(headerKeys: Record<string, string> = {}): stri
       const clean = String(m || '').trim();
       if (clean && !out.includes(clean)) out.push(clean);
     }
-    if (out.length >= 3) break;
+    if (out.length >= 5) break;
   }
-  return out.slice(0, 3);
+  return out.slice(0, 5);
 }
 
 /**
@@ -341,7 +362,8 @@ function appendUserConfiguredCandidates(
   base: RouteCandidate[],
   requestedModel: string,
   headerKeys: Record<string, string> = {},
-  customModelsOverride?: string[]
+  customModelsOverride?: string[],
+  includeAccountModels?: boolean
 ): RouteCandidate[] {
   const candidates = [...base];
 
@@ -372,6 +394,20 @@ function appendUserConfiguredCandidates(
         Boolean(getProviderApiKey(prov.id, headerKeys));
       if (hasKey) {
         candidates.push({ provider: prov.id, model: prov.models[0] });
+      }
+    }
+  }
+
+  // Virtual-group requests should also reach the models the user's own accounts
+  // actually serve (Cloudflare pool catalog, verified models, …) — otherwise a
+  // group like auto-smart would only ever use the built-in default model.
+  if (includeAccountModels) {
+    for (const prov of DEFAULT_PROVIDERS) {
+      if (prov.id === 'custom') continue;
+      for (const m of getAccountPreferredModels(prov.id, headerKeys)) {
+        if (!candidates.some((c) => c.provider === prov.id && c.model === m)) {
+          candidates.push({ provider: prov.id, model: m });
+        }
       }
     }
   }
@@ -504,7 +540,7 @@ export async function executeProviderAccountPoolCall(
           poolErrors.push(`Akun "${account.name}": Cloudflare Account ID tidak ditemukan. Isi Account ID di tab Provider Tiers.`);
           continue;
         }
-        baseUrl = `https://api.cloudflare.com/client/v4/accounts/${accId}/ai/v1`;
+        baseUrl = `${getCloudflareApiBase()}/accounts/${accId}/ai/v1`;
       } else {
         baseUrl = getProviderBaseUrl(provider, headerKeys);
       }
