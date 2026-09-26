@@ -3,6 +3,17 @@ import { db } from '@/lib/db';
 import { DEFAULT_PROVIDERS, getProviderApiKey } from '@/lib/config';
 
 export const runtime = 'nodejs';
+export const maxDuration = 30;
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': '*',
+};
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
 
 export async function GET() {
   try {
@@ -15,18 +26,21 @@ export async function GET() {
       statusMap[p.id] = hasKey;
     });
 
-    return NextResponse.json({
-      keys: settings.keys,
-      baseUrls: settings.baseUrls,
-      cfAccountId: settings.cfAccountId,
-      cfAccounts: settings.cfAccounts || [],
-      providerAccounts: settings.providerAccounts || [],
-      statusMap,
-    });
+    return NextResponse.json(
+      {
+        keys: settings.keys,
+        baseUrls: settings.baseUrls,
+        cfAccountId: settings.cfAccountId,
+        cfAccounts: settings.cfAccounts || [],
+        providerAccounts: settings.providerAccounts || [],
+        statusMap,
+      },
+      { headers: CORS_HEADERS }
+    );
   } catch (error: any) {
     return NextResponse.json(
       { error: 'Failed to retrieve provider configuration', details: error?.message },
-      { status: 500 }
+      { status: 500, headers: CORS_HEADERS }
     );
   }
 }
@@ -47,16 +61,19 @@ export async function POST(req: Request) {
     const updated = db.getProviderSettings();
     const activeCount = Object.keys(updated.keys).filter((k) => updated.keys[k]?.trim()).length;
 
-    return NextResponse.json({
-      success: true,
-      message: `Berhasil menyimpan konfigurasi dan ${updated.providerAccounts?.length || 0} akun multi-provider!`,
-      activeCount,
-      settings: updated,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        message: `Berhasil menyimpan konfigurasi dan ${updated.providerAccounts?.length || 0} akun multi-provider!`,
+        activeCount,
+        settings: updated,
+      },
+      { headers: CORS_HEADERS }
+    );
   } catch (error: any) {
     return NextResponse.json(
       { error: 'Gagal menyimpan konfigurasi provider', details: error?.message },
-      { status: 500 }
+      { status: 500, headers: CORS_HEADERS }
     );
   }
 }

@@ -1,9 +1,19 @@
 import { DEFAULT_PROVIDERS, getGatewaySecret, getProviderApiKey } from '@/lib/config';
 
 export const runtime = 'nodejs';
+export const maxDuration = 30;
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': '*',
+};
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
 
 export async function GET(req: Request) {
-  const url = new URL(req.url);
   const host = req.headers.get('host') || 'localhost:3000';
   const proto = req.headers.get('x-forwarded-proto') || 'http';
   const baseUrl = `${proto}://${host}`;
@@ -33,7 +43,7 @@ export async function GET(req: Request) {
     }),
     {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     }
   );
 }

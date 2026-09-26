@@ -3,6 +3,13 @@ import { ChatCompletionRequest, ProviderId } from '@/lib/types';
 import { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
+export const maxDuration = 30;
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': '*',
+};
 
 const TEST_MODELS: Record<ProviderId, string> = {
   openai: 'gpt-4o-mini',
@@ -20,15 +27,19 @@ const TEST_MODELS: Record<ProviderId, string> = {
   custom: 'llama3.3:latest',
 };
 
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { provider, apiKey, baseUrl, accountId, model } = await req.json();
 
     if (!provider) {
-      return new Response(JSON.stringify({ success: false, error: 'Provider is required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Provider is required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+      );
     }
 
     const testModel = model || TEST_MODELS[provider as ProviderId] || 'gpt-4o-mini';
@@ -40,15 +51,9 @@ export async function POST(req: NextRequest) {
     };
 
     const headerKeys: Record<string, string> = {};
-    if (apiKey) {
-      headerKeys[`x-${provider}-key`] = apiKey;
-    }
-    if (baseUrl) {
-      headerKeys[`x-${provider}-base-url`] = baseUrl;
-    }
-    if (accountId) {
-      headerKeys['x-cloudflare-account-id'] = accountId;
-    }
+    if (apiKey) headerKeys[`x-${provider}-key`] = apiKey;
+    if (baseUrl) headerKeys[`x-${provider}-base-url`] = baseUrl;
+    if (accountId) headerKeys['x-cloudflare-account-id'] = accountId;
 
     const start = Date.now();
     const res = await executeProviderCall(
@@ -68,26 +73,18 @@ export async function POST(req: NextRequest) {
           latency,
           error: errorText.slice(0, 300) || `HTTP error ${res.status}`,
         }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
+        { status: 200, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
       );
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        status: 200,
-        latency,
-        model: testModel,
-      }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: true, status: 200, latency, model: testModel }),
+      { status: 200, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
     );
   } catch (err: any) {
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: err.message || 'Connection failed',
-      }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: false, error: err.message || 'Connection failed' }),
+      { status: 200, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
     );
   }
 }

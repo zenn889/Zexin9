@@ -64,6 +64,7 @@ export default function Home() {
       if (authRes.ok) {
         const authData = await authRes.json();
         setHasMasterKey(Boolean(authData.hasMasterKey));
+        // If no master key set (open access), server returns isAuthenticated=true directly
         setIsAuthenticated(Boolean(authData.isAuthenticated));
         if (authData.currentKey) {
           setGatewaySecret(authData.currentKey);

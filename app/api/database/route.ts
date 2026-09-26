@@ -2,15 +2,26 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
 export const runtime = 'nodejs';
+export const maxDuration = 30;
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': '*',
+};
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
 
 export async function GET() {
   try {
     const status = await db.getDatabaseStatus();
-    return NextResponse.json(status);
+    return NextResponse.json(status, { headers: CORS_HEADERS });
   } catch (error: any) {
     return NextResponse.json(
       { error: 'Failed to retrieve database status', details: error?.message },
-      { status: 500 }
+      { status: 500, headers: CORS_HEADERS }
     );
   }
 }
@@ -23,13 +34,13 @@ export async function POST(req: Request) {
     // 1. Test MongoDB connection
     if (action === 'test_mongo') {
       const result = await db.testMongoConnection(body.uri, body.dbName);
-      return NextResponse.json(result);
+      return NextResponse.json(result, { headers: CORS_HEADERS });
     }
 
     // 2. Test Supabase connection
     if (action === 'test_supabase') {
       const result = await db.testSupabaseConnection(body.url, body.key, body.table);
-      return NextResponse.json(result);
+      return NextResponse.json(result, { headers: CORS_HEADERS });
     }
 
     // 3. Save DB Configuration
@@ -43,39 +54,43 @@ export async function POST(req: Request) {
         supabaseTable: body.supabaseTable,
       });
 
-      // Attempt cloud sync after saving
       const syncResult = await db.syncFromCloud();
       const updatedStatus = await db.getDatabaseStatus();
 
-      return NextResponse.json({
-        success: true,
-        message: 'Konfigurasi database berhasil disimpan dan disinkronkan!',
-        syncResult,
-        status: updatedStatus,
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          message: 'Konfigurasi database berhasil disimpan dan disinkronkan!',
+          syncResult,
+          status: updatedStatus,
+        },
+        { headers: CORS_HEADERS }
+      );
     }
 
     // 4. Force sync from cloud DB
     if (action === 'sync') {
       const result = await db.syncFromCloud();
-      return NextResponse.json({
-        success: true,
-        message: `Sinkronisasi berhasil dari sumber: ${result.source}`,
-        result,
-      });
+      return NextResponse.json(
+        { success: true, message: `Sinkronisasi berhasil dari sumber: ${result.source}`, result },
+        { headers: CORS_HEADERS }
+      );
     }
 
     // 5. Export full database dump
     if (action === 'export') {
       const data = db.exportAllData();
-      return NextResponse.json(data);
+      return NextResponse.json(data, { headers: CORS_HEADERS });
     }
 
-    return NextResponse.json({ error: 'Action tidak dikenal' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Action tidak dikenal' },
+      { status: 400, headers: CORS_HEADERS }
+    );
   } catch (error: any) {
     return NextResponse.json(
       { error: 'Gagal memproses request database', details: error?.message },
-      { status: 500 }
+      { status: 500, headers: CORS_HEADERS }
     );
   }
 }

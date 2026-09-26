@@ -2,6 +2,17 @@ import { db } from '@/lib/db';
 import { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
+export const maxDuration = 30;
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': '*',
+};
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -11,22 +22,21 @@ export async function GET(req: NextRequest) {
   const stats = db.getStats();
 
   return new Response(
-    JSON.stringify({
-      success: true,
-      logs,
-      stats,
-    }),
+    JSON.stringify({ success: true, logs, stats }),
     {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     }
   );
 }
 
 export async function DELETE() {
   db.clearLogs();
-  return new Response(JSON.stringify({ success: true, message: 'Logs cleared' }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return new Response(
+    JSON.stringify({ success: true, message: 'Logs cleared' }),
+    {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+    }
+  );
 }
