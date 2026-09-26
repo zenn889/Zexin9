@@ -190,6 +190,7 @@ export function PlaygroundTab({
   // --- Current Active Chat State ---
   const [input, setInput] = useState('');
   const [selectedModel, setSelectedModel] = useState('auto-smart');
+  const selectedModelRef = useRef('auto-smart'); // always up-to-date, used inside async handleSend
   const [enableCompression, setEnableCompression] = useState(true);
   const [cavemanMode, setCavemanMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -494,6 +495,9 @@ export function PlaygroundTab({
     const textToSend = customPrompt || input;
     if ((!textToSend.trim() && attachedFiles.length === 0) || isLoading) return;
 
+    // Always read from ref to get the latest model even if state is stale in closure
+    const currentModel = selectedModelRef.current || selectedModel;
+
     // 1. Construct prompt payload including file contexts
     let fullPromptPayload = textToSend.trim();
     if (attachedFiles.length > 0) {
@@ -539,7 +543,7 @@ export function PlaygroundTab({
         ? {
             ...s,
             title: sessionTitle,
-            model: selectedModel,
+            model: currentModel,
             messages: newMessages,
             updatedAt: new Date().toISOString(),
           }
@@ -613,7 +617,7 @@ export function PlaygroundTab({
         headers,
         credentials: 'include',
         body: JSON.stringify({
-          model: selectedModel,
+          model: currentModel,
           messages: apiMessages,
           stream: true,
           max_tokens: 8192,
@@ -621,7 +625,7 @@ export function PlaygroundTab({
       });
 
       const servedBy = res.headers.get('x-router-provider') || 'unknown';
-      const servedModel = res.headers.get('x-router-model') || selectedModel;
+      const servedModel = res.headers.get('x-router-model') || currentModel;
       const fallbackCount = parseInt(res.headers.get('x-router-fallback-count') || '0', 10);
       const tokensSaved = parseInt(res.headers.get('x-router-tokens-saved') || '0', 10);
 
@@ -916,7 +920,19 @@ export function PlaygroundTab({
               </label>
               <select
                 value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
+                onChange={(e) => {
+                  const newModel = e.target.value;
+                  setSelectedModel(newModel);
+                  selectedModelRef.current = newModel;
+                  // Immediately persist the chosen model into the active session
+                  if (activeSession && newModel !== 'custom') {
+                    const updatedSessions = sessions.map((s) =>
+                      s.id === activeSession.id ? { ...s, model: newModel } : s
+                    );
+                    setSessions(updatedSessions);
+                    persistSessions(updatedSessions, activeSession.id);
+                  }
+                }}
                 className="w-full sm:w-auto input-pro font-mono text-xs font-semibold text-cyan-300 truncate max-w-full"
               >
                 <optgroup label="⭐ Virtual Multi-Tier Groups (Auto-Failover)">
@@ -950,9 +966,38 @@ export function PlaygroundTab({
               {selectedModel === 'custom' && (
                 <input
                   type="text"
-                  placeholder="Ketik model ID..."
-                  onChange={(e) => setSelectedModel(e.target.value)}
-                  className="bg-slate-950 border border-cyan-500 rounded-xl px-2.5 py-1 text-xs font-mono text-cyan-200 focus:outline-none w-32"
+                  placeholder="Ketik model ID lalu tekan Enter..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = (e.target as HTMLInputElement).value.trim();
+                      if (val) {
+                        setSelectedModel(val);
+                        selectedModelRef.current = val;
+                        if (activeSession) {
+                          const updatedSessions = sessions.map((s) =>
+                            s.id === activeSession.id ? { ...s, model: val } : s
+                          );
+                          setSessions(updatedSessions);
+                          persistSessions(updatedSessions, activeSession.id);
+                        }
+                      }
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const val = e.target.value.trim();
+                    if (val) {
+                      setSelectedModel(val);
+                      selectedModelRef.current = val;
+                      if (activeSession) {
+                        const updatedSessions = sessions.map((s) =>
+                          s.id === activeSession.id ? { ...s, model: val } : s
+                        );
+                        setSessions(updatedSessions);
+                        persistSessions(updatedSessions, activeSession.id);
+                      }
+                    }
+                  }}
+                  className="bg-slate-950 border border-cyan-500 rounded-xl px-2.5 py-1 text-xs font-mono text-cyan-200 focus:outline-none w-40"
                 />
               )}
             </div>
