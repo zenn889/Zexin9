@@ -55,6 +55,7 @@ export interface Message {
     servedBy?: string;
     servedModel?: string;
     fallbackCount?: number;
+    failures?: string;
     tokensSaved?: number;
     durationMs?: number;
     tokensPerSec?: number;
@@ -655,6 +656,7 @@ export function PlaygroundTab({
       const servedBy = res.headers.get('x-router-provider') || 'unknown';
       const servedModel = res.headers.get('x-router-model') || currentModel;
       const fallbackCount = parseInt(res.headers.get('x-router-fallback-count') || '0', 10);
+      const failures = res.headers.get('x-router-failures') || '';
       const tokensSaved = parseInt(res.headers.get('x-router-tokens-saved') || '0', 10);
 
       if (!res.ok) {
@@ -780,6 +782,7 @@ export function PlaygroundTab({
           servedBy,
           servedModel,
           fallbackCount,
+          failures,
           tokensSaved,
           durationMs: totalDuration,
           tokensPerSec,
@@ -1260,6 +1263,17 @@ export function PlaygroundTab({
                       {msg.meta.servedBy && (
                         <span className="px-2.5 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800 font-bold">
                           ⚡ Provider: {msg.meta.servedBy} ({msg.meta.servedModel})
+                        </span>
+                      )}
+                      {Boolean(msg.meta.fallbackCount) && (
+                        <span
+                          className="px-2.5 py-0.5 rounded-full bg-amber-950/80 text-amber-300 border border-amber-800/80"
+                          title={
+                            msg.meta.failures ||
+                            'Provider utama (mis. custom) gagal, permintaan dijawab oleh provider fallback.'
+                          }
+                        >
+                          ⚠️ Fallback ×{msg.meta.fallbackCount}
                         </span>
                       )}
                       {msg.meta.durationMs !== undefined && (

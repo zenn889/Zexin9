@@ -30,6 +30,8 @@ export interface RouterExecutionResult {
   tokensSaved: number;
   cfAccountUsed?: string;
   accountUsed?: string;
+  /** Failure logs from earlier candidates when a fallback was needed. */
+  failureLogs?: string[];
 }
 
 /**
@@ -184,6 +186,32 @@ export function sanitizeMessages(messages: ChatMessage[]): ChatMessage[] {
   return valid;
 }
 
+/** Base URLs of enabled custom-provider accounts that point at a real endpoint. */
+function getCustomAccountBaseUrls(headerKeys: Record<string, string> = {}): string[] {
+  return getEffectiveProviderAccounts('custom', headerKeys)
+    .filter((a) => a.enabled !== false)
+    .map((a) => (a.baseUrl || '').trim())
+    .filter((u) => u.length > 0 && u !== 'http://localhost:11434/v1' && !u.includes('{'));
+}
+
+/**
+ * True when the user configured the custom provider with a real endpoint:
+ * via the x-custom-base-url header, the saved provider settings, or a
+ * connected account (each account stores its own endpoint URL).
+ */
+function isCustomProviderConfigured(headerKeys: Record<string, string> = {}): boolean {
+  const headerOrStored = (
+    headerKeys['x-custom-base-url'] ||
+    getProviderBaseUrl('custom', headerKeys) ||
+    ''
+  ).trim();
+  const directlyConfigured =
+    headerOrStored.length > 0 &&
+    headerOrStored !== 'http://localhost:11434/v1' &&
+    !headerOrStored.includes('{');
+  return Boolean(directlyConfigured || getCustomAccountBaseUrls(headerKeys).length > 0);
+}
+
 /**
  * Resolve ordered candidate list for a given requested model.
  * Pools multiple providers together for seamless failover and load balancing.
@@ -273,17 +301,11 @@ export function resolveCandidates(
   // 3. Multi-Provider Pool Inclusion: Append ANY provider configured by the user that has accounts or a key
   for (const prov of DEFAULT_PROVIDERS) {
     if (!candidates.some((c) => c.provider === prov.id)) {
-      // Custom provider: active if it has a base URL configured (API key is optional for Ollama)
+      // Custom provider: active when a real endpoint is configured — via the
+      // x-custom-base-url header, the saved settings, or a connected account
+      // (the "Provider Accounts" form stores the endpoint on the account itself).
       if (prov.id === 'custom') {
-        const customBaseUrl = (
-          headerKeys['x-custom-base-url'] ||
-          getProviderBaseUrl('custom', headerKeys)
-        ).trim();
-        // Only skip custom if it's literally the default localhost (not user-configured)
-        const isUserConfigured = customBaseUrl &&
-          customBaseUrl !== 'http://localhost:11434/v1' &&
-          !customBaseUrl.includes('{');
-        if (isUserConfigured) {
+        if (isCustomProviderConfigured(headerKeys)) {
           candidates.push({ provider: 'custom', model: requestedModel });
         }
         continue;
@@ -298,17 +320,10 @@ export function resolveCandidates(
     }
   }
 
-  // 4. If the custom provider has a base URL configured (request header, dashboard
-  //    config or env), put custom FIRST in the chain so it gets tried before the
-  //    generic fallback tiers.
-  const customBaseUrl = (
-    headerKeys['x-custom-base-url'] ||
-    getProviderBaseUrl('custom', headerKeys) ||
-    ''
-  ).trim();
-  const isCustomConfigured =
-    customBaseUrl && customBaseUrl !== 'http://localhost:11434/v1' && !customBaseUrl.includes('{');
-  if (isCustomConfigured) {
+  // 4. If the custom provider is configured (request header, dashboard config or a
+  //    connected account), put custom FIRST in the chain so it gets tried before
+  //    the generic fallback tiers.
+  if (isCustomProviderConfigured(headerKeys)) {
     const alreadyFirst = candidates[0]?.provider === 'custom';
     if (!alreadyFirst) {
       // Move custom to front if it's in the list, otherwise insert it
@@ -559,6 +574,7 @@ export async function routeChatCompletion(
           servedModel: normalizeModelForProvider(candidate.provider, candidate.model),
           fallbackCount,
           tokensSaved,
+          failureLogs,
           accountUsed: accountUsed?.name,
           cfAccountUsed: candidate.provider === 'cloudflare' ? accountUsed?.name : undefined,
         };
@@ -608,5 +624,6 @@ export async function routeChatCompletion(
     servedModel: rawRequest.model,
     fallbackCount,
     tokensSaved,
+    failureLogs,
   };
 }

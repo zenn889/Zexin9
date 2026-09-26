@@ -124,6 +124,12 @@ export async function POST(req: NextRequest) {
     responseHeaders.set('x-router-provider', result.servedBy);
     responseHeaders.set('x-router-model', result.servedModel);
     responseHeaders.set('x-router-fallback-count', String(result.fallbackCount));
+    if (result.fallbackCount > 0 && result.failureLogs && result.failureLogs.length > 0) {
+      responseHeaders.set(
+        'x-router-failures',
+        result.failureLogs.slice(0, 3).join(' | ').slice(0, 500)
+      );
+    }
     responseHeaders.set('x-router-tokens-saved', String(result.tokensSaved));
 
     // Strip upstream compression headers because Node.js fetch already decompresses the stream!

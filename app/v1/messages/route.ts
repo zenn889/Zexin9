@@ -118,6 +118,13 @@ export async function POST(req: NextRequest) {
       responseHeaders.set('Connection', 'keep-alive');
       responseHeaders.set('x-router-provider', result.servedBy);
       responseHeaders.set('x-router-model', result.servedModel);
+      responseHeaders.set('x-router-fallback-count', String(result.fallbackCount));
+      if (result.fallbackCount > 0 && result.failureLogs && result.failureLogs.length > 0) {
+        responseHeaders.set(
+          'x-router-failures',
+          result.failureLogs.slice(0, 3).join(' | ').slice(0, 500)
+        );
+      }
       return new Response(anthropicStream, { status: 200, headers: responseHeaders });
     }
 
@@ -131,6 +138,13 @@ export async function POST(req: NextRequest) {
     responseHeaders.set('Content-Type', 'application/json');
     responseHeaders.set('x-router-provider', result.servedBy);
     responseHeaders.set('x-router-model', result.servedModel);
+    responseHeaders.set('x-router-fallback-count', String(result.fallbackCount));
+    if (result.fallbackCount > 0 && result.failureLogs && result.failureLogs.length > 0) {
+      responseHeaders.set(
+        'x-router-failures',
+        result.failureLogs.slice(0, 3).join(' | ').slice(0, 500)
+      );
+    }
     return new Response(JSON.stringify(openAIToAnthropicResponse(data)), {
       status: 200,
       headers: responseHeaders,

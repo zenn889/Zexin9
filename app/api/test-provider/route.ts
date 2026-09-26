@@ -1,7 +1,7 @@
 import { executeProviderCall } from '@/lib/router';
 import { ChatCompletionRequest, ProviderId } from '@/lib/types';
 import { requireAuth } from '@/lib/auth';
-import { getProviderApiKey, getProviderBaseUrl } from '@/lib/config';
+import { getProviderApiKey, getProviderBaseUrl, getEffectiveProviderAccounts } from '@/lib/config';
 import { buildModelsUrl } from '@/lib/adapters/openai-compatible';
 import { NextRequest } from 'next/server';
 
@@ -191,7 +191,15 @@ export async function POST(req: NextRequest) {
 
     if (mayDiscover) {
       const effectiveKey = getProviderApiKey(providerId, headerKeys) || '';
-      const effectiveBaseUrl = requestedBaseUrl || getProviderBaseUrl(providerId, headerKeys);
+      // Prefer the endpoint configured on a connected account — the "Provider
+      // Accounts" form stores the base URL on the account itself, not in the
+      // general provider settings.
+      const accountBaseUrl = getEffectiveProviderAccounts(providerId, headerKeys)
+        .filter((a) => a.enabled !== false)
+        .map((a) => (a.baseUrl || '').trim())
+        .find((u) => u.length > 0 && !u.includes('{'));
+      const effectiveBaseUrl =
+        requestedBaseUrl || accountBaseUrl || getProviderBaseUrl(providerId, headerKeys);
       modelsFound = await discoverModels(effectiveBaseUrl, effectiveKey);
 
       for (const cand of modelsFound) {
