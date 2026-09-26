@@ -344,6 +344,53 @@ export function resolveCandidates(
 const providerRoundRobinIndex: Record<string, number> = {};
 
 /**
+ * Some custom endpoints (Claude resellers, Anthropic-style proxies) do not
+ * implement the OpenAI chat route at all: /v1/models works, but
+ * /v1/chat/completions answers with a generic 404 ("Not found.") while the
+ * Anthropic Messages route (/v1/messages) works fine. This detects that
+ * specific situation so the call can be retried in Anthropic format.
+ */
+async function isRouteLevel404(res: Response): Promise<boolean> {
+  if (res.status !== 404) return false;
+  try {
+    const text = (await res.clone().text()).toLowerCase();
+    // Model-specific 404s mention the model name; route-level ones don't.
+    return text.length > 0 && !text.includes('model');
+  } catch {
+    return false;
+  }
+}
+
+/** Returns a copy of the response tagged with the upstream protocol that served it. */
+function tagUpstreamProtocol(res: Response, protocol: string): Response {
+  const headers = new Headers(res.headers);
+  headers.set('x-router-upstream-protocol', protocol);
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
+/**
+ * Calls a custom endpoint in OpenAI format and, when the endpoint has no
+ * OpenAI chat route at all, retries the same request in Anthropic Messages
+ * format (with full request/response translation via the anthropic adapter).
+ */
+async function callCustomWithProtocolFallback(
+  baseUrl: string,
+  apiKey: string,
+  request: ChatCompletionRequest,
+  signal?: AbortSignal
+): Promise<Response> {
+  const res = await callOpenAICompatible(baseUrl, apiKey, request, signal);
+  if (!(await isRouteLevel404(res))) return res;
+  try {
+    const alt = await callAnthropic(baseUrl, apiKey, request, signal);
+    if (alt.ok) return tagUpstreamProtocol(alt, 'anthropic-messages');
+  } catch {
+    // fall through to the original response below
+  }
+  return res;
+}
+
+/**
  * Universal 9Router-style multi-account pool execution engine.
  * Automatically round-robins across all connected accounts for a provider
  * and immediately fails over to the next account if one hits a rate limit (429),
@@ -384,7 +431,7 @@ export async function executeProviderAccountPoolCall(
     const customUrl = (headerKeys['x-custom-base-url'] || '').trim() ||
       getProviderBaseUrl('custom', headerKeys);
     const customKey = (headerKeys['x-custom-key'] || '').trim();
-    const res = await callOpenAICompatible(customUrl, customKey, reqWithTargetModel, signal);
+    const res = await callCustomWithProtocolFallback(customUrl, customKey, reqWithTargetModel, signal);
     return { response: res, errors: [] };
   }
 
@@ -420,6 +467,9 @@ export async function executeProviderAccountPoolCall(
         res = await callAnthropic(baseUrl, account.apiKey, reqWithTargetModel, signal);
       } else if (provider === 'gemini') {
         res = await callGemini(baseUrl, account.apiKey, reqWithTargetModel, signal);
+      } else if (provider === 'custom') {
+        // Custom endpoints may speak either OpenAI or Anthropic Messages format.
+        res = await callCustomWithProtocolFallback(baseUrl, account.apiKey, reqWithTargetModel, signal);
       } else {
         res = await callOpenAICompatible(baseUrl, account.apiKey, reqWithTargetModel, signal);
       }

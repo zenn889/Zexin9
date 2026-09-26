@@ -42,6 +42,8 @@ interface AttemptResult {
   status: number;
   latency: number;
   errorText: string;
+  /** Upstream protocol that actually served the call (e.g. 'anthropic-messages'). */
+  protocol?: string;
 }
 
 function jsonResponse(payload: Record<string, unknown>): Response {
@@ -83,11 +85,12 @@ async function runChatAttempt(
   try {
     const res = await executeProviderCall(providerId, model, request, headerKeys, controller.signal);
     const latency = Date.now() - start;
+    const protocol = res.headers.get('x-router-upstream-protocol') || '';
     let errorText = '';
     if (!res.ok) {
       errorText = (await res.text().catch(() => '')).slice(0, 400);
     }
-    return { ok: res.ok, status: res.status, latency, errorText };
+    return { ok: res.ok, status: res.status, latency, errorText, protocol };
   } catch (err: any) {
     const latency = Date.now() - start;
     if (err?.name === 'AbortError') {
@@ -229,6 +232,7 @@ export async function POST(req: NextRequest) {
         model: usedModel,
         tried,
         modelsFound,
+        ...(finalAttempt.protocol ? { protocol: finalAttempt.protocol } : {}),
       });
     }
 
@@ -236,7 +240,12 @@ export async function POST(req: NextRequest) {
     // so the dashboard can show actionable information instead of a raw error blob.
     let hint: string | undefined;
     const status409 = finalAttempt?.status === 409;
-    if (isCustom && modelsFound.length === 0) {
+    const route404 =
+      finalAttempt?.status === 404 && !/model/i.test(finalAttempt?.errorText || '');
+    if (route404) {
+      hint =
+        'Endpoint menjawab 404 "Not found" di rute chat (bukan soal model). Gateway sudah mencoba format Anthropic (/v1/messages) juga — kalau dua-duanya gagal, cek Base URL: beberapa provider butuh path khusus, mis. https://host/api.';
+    } else if (isCustom && modelsFound.length === 0) {
       hint = status409
         ? '409 Conflict: endpoint menganggap model ini sedang tidak tersedia (model belum siap atau saluran sibuk). Coba lagi beberapa saat, atau isi nama model lain.'
         : 'Endpoint tidak menyediakan daftar model (/models) atau tidak bisa diakses. Isi nama model secara manual di kolom model, lalu tes ulang.';

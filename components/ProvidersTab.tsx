@@ -122,6 +122,8 @@ interface PingResult {
   tried?: string[];
   modelsFound?: string[];
   hint?: string;
+  /** Upstream protocol that served the ping (e.g. 'anthropic-messages'). */
+  protocol?: string;
 }
 
 export function ProvidersTab({
@@ -510,6 +512,7 @@ export function ProvidersTab({
           tried: data.tried,
           modelsFound: data.modelsFound,
           hint: data.hint,
+          protocol: data.protocol,
         },
       }));
     } catch (err: any) {
@@ -781,6 +784,7 @@ export function ProvidersTab({
           tried: data.tried,
           modelsFound: data.modelsFound,
           hint: data.hint,
+          protocol: data.protocol,
         },
       }));
     } catch (err: any) {
@@ -1316,7 +1320,9 @@ export function ProvidersTab({
                           >
                             <div className="break-all whitespace-pre-wrap">
                               {ping.success
-                                ? `✓ Siap (${ping.latency}ms)${ping.model ? ` · ${ping.model}` : ''}`
+                                ? `✓ Siap (${ping.latency}ms)${ping.model ? ` · ${ping.model}` : ''}${
+                                    ping.protocol === 'anthropic-messages' ? ' · format Anthropic' : ''
+                                  }`
                                 : `✗ ${ping.error?.slice(0, 200) || 'Error'}`}
                             </div>
                             {!ping.success && (ping.modelsFound?.length || 0) > 0 && (
@@ -1502,6 +1508,15 @@ export function ProvidersTab({
                             💡 Mendukung multi-key (pisahkan dengan koma atau baris baru) untuk failover otomatis.
                           </p>
                         )}
+                        {provider.id === 'custom' &&
+                          providerAccounts.filter((a) => a.provider === 'custom').length > 0 && (
+                            <p className="text-[10px] text-slate-500 mt-1">
+                              ℹ️ {providerAccounts.filter((a) => a.provider === 'custom').length} akun Custom
+                              tersambung — API key &amp; endpoint disimpan di tiap akun (lihat bagian Akun
+                              Terhubung di atas). Kolom ini opsional: dipakai sebagai default/fallback bila
+                              tidak ada akun, dan oleh tombol Test Model di kartu ini.
+                            </p>
+                          )}
                       </div>
 
                       {/* Cloudflare Multi-Account Pool Manager */}
@@ -1870,6 +1885,7 @@ export function ProvidersTab({
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               <span>
                                 {ping.latency}ms OK{ping.model ? ` · ${ping.model}` : ''}
+                                {ping.protocol === 'anthropic-messages' ? ' · format Anthropic' : ''}
                               </span>
                             </span>
                           )}

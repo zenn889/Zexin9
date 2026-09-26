@@ -203,6 +203,8 @@ export async function callAnthropic(
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
+      // Some Anthropic-compatible resellers authenticate with Bearer only.
+      ...(apiKey && apiKey.trim() ? { Authorization: `Bearer ${apiKey.trim()}` } : {}),
     },
     body: JSON.stringify(body),
     signal,
