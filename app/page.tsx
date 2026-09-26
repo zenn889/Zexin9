@@ -57,6 +57,63 @@ export default function Home() {
     checkAuthAndStatus();
   }, []);
 
+  // --- Self-heal: restore connected accounts to the server ---
+  // Server-side storage can be ephemeral (no database connected / cold start),
+  // which made accounts "disappear" after a refresh even though this browser
+  // still holds a saved copy. Whenever the dashboard loads and the server
+  // reports no accounts at all while the browser has some, push them back up.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const localAccountsRaw =
+          localStorage.getItem('zexin9_provider_accounts') ||
+          localStorage.getItem('9router_provider_accounts');
+        const localAccounts = localAccountsRaw ? JSON.parse(localAccountsRaw) : [];
+        const localCfRaw =
+          localStorage.getItem('zexin9_cf_accounts') || localStorage.getItem('9router_cf_accounts');
+        const localCfAccounts = localCfRaw ? JSON.parse(localCfRaw) : [];
+        const localCfAccountId =
+          localStorage.getItem('zexin9_cf_account_id') ||
+          localStorage.getItem('9router_cf_account_id') ||
+          '';
+
+        const hasLocal =
+          (Array.isArray(localAccounts) && localAccounts.length > 0) ||
+          (Array.isArray(localCfAccounts) && localCfAccounts.length > 0);
+        if (!hasLocal) return;
+
+        const res = await fetch('/api/providers/config', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const serverAccounts = Array.isArray(data?.providerAccounts) ? data.providerAccounts : [];
+        const serverCfAccounts = Array.isArray(data?.cfAccounts) ? data.cfAccounts : [];
+        if (serverAccounts.length > 0 || serverCfAccounts.length > 0) return;
+
+        const post = await fetch('/api/providers/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            keys: data?.keys || {},
+            baseUrls: data?.baseUrls || {},
+            cfAccountId: String(data?.cfAccountId || '') || localCfAccountId,
+            cfAccounts: Array.isArray(localCfAccounts) ? localCfAccounts : [],
+            providerAccounts: Array.isArray(localAccounts) ? localAccounts : [],
+          }),
+        });
+        if (post.ok && !cancelled) {
+          // Let the Providers tab and the Playground refresh their views.
+          window.dispatchEvent(new Event('zexin9-config-changed'));
+        }
+      } catch {
+        // best effort — never block the dashboard
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const checkAuthAndStatus = async () => {
     try {
       // Check auth status

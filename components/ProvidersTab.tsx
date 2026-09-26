@@ -402,6 +402,36 @@ export function ProvidersTab({
   };
 
   // --- 9Router Universal Connections Pool Handlers ---
+  // Re-read the server config when another part of the app pushes accounts to
+  // the server (e.g. the self-heal in page.tsx restoring them from this browser).
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onChanged = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        fetch('/api/providers/config', { cache: 'no-store' })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (!data) return;
+            if (Array.isArray(data.providerAccounts)) {
+              setProviderAccounts(data.providerAccounts);
+              providerAccountsRef.current = data.providerAccounts;
+            }
+            if (Array.isArray(data.cfAccounts) && data.cfAccounts.length > 0) {
+              setCfAccounts(data.cfAccounts);
+            }
+            if (data.persistence) setServerPersistence(data.persistence);
+          })
+          .catch(() => {});
+      }, 1000);
+    };
+    window.addEventListener('zexin9-config-changed', onChanged);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener('zexin9-config-changed', onChanged);
+    };
+  }, []);
+
   const saveProviderAccountsLocalAndSync = (updated: ProviderAccount[]) => {
     setProviderAccounts(updated);
     if (typeof window !== 'undefined') {
