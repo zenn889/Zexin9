@@ -1,7 +1,9 @@
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { MongoClient, Db } from 'mongodb';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { encrypt, decrypt } from './crypto';
 import {
   setRuntimeStoredKeys,
   setRuntimeStoredBaseUrls,
@@ -92,13 +94,69 @@ function getDbConfigFilePath(): string {
   return path.join(getDataDir(), 'db-config.json');
 }
 
+// --- Encryption-at-rest helpers (AES-256-GCM via lib/crypto) ---
+// Values are stored with a self-describing prefix. Legacy plaintext values are
+// passed through untouched on read, so existing deployments keep working.
+const ENC_PREFIX = 'enc:v1:';
+
+function encValue<T extends string | undefined>(value: T): T {
+  if (typeof value !== 'string' || value.length === 0) return value;
+  return (ENC_PREFIX + encrypt(value)) as T;
+}
+
+function decValue<T extends string | undefined>(value: T): T {
+  if (typeof value !== 'string' || !value.startsWith(ENC_PREFIX)) return value;
+  return decrypt(value.slice(ENC_PREFIX.length)) as T;
+}
+
+function encKeysRecord(keys: Record<string, string> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(keys || {})) out[k] = encValue(v);
+  return out;
+}
+
+function decKeysRecord(keys: Record<string, string> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(keys || {})) out[k] = decValue(v);
+  return out;
+}
+
+function encProviderAccounts(accounts: ProviderAccount[] | undefined): ProviderAccount[] {
+  return (accounts || []).map((acc) => ({ ...acc, apiKey: encValue(acc.apiKey) }));
+}
+
+function decProviderAccounts(accounts: ProviderAccount[] | undefined): ProviderAccount[] {
+  return (accounts || []).map((acc) => ({ ...acc, apiKey: decValue(acc.apiKey) }));
+}
+
+function encCfAccounts(accounts: CloudflareAccount[] | undefined): CloudflareAccount[] {
+  return (accounts || []).map((acc) => ({ ...acc, apiToken: encValue(acc.apiToken) }));
+}
+
+function decCfAccounts(accounts: CloudflareAccount[] | undefined): CloudflareAccount[] {
+  return (accounts || []).map((acc) => ({ ...acc, apiToken: decValue(acc.apiToken) }));
+}
+
+function encTokens(tokens: ClientToken[] | undefined): ClientToken[] {
+  return (tokens || []).map((t) => ({ ...t, token: encValue(t.token) }));
+}
+
+function decTokens(tokens: ClientToken[] | undefined): ClientToken[] {
+  return (tokens || []).map((t) => ({ ...t, token: decValue(t.token) }));
+}
+
 // Load DB config from file if present
 function loadDbConfigFile() {
   try {
     const configPath = getDbConfigFilePath();
     if (fs.existsSync(configPath)) {
       const raw = fs.readFileSync(configPath, 'utf-8');
-      runtimeDbConfig = JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      runtimeDbConfig = {
+        ...parsed,
+        mongodbUri: parsed.mongodbUri ? decValue(parsed.mongodbUri) : parsed.mongodbUri,
+        supabaseKey: parsed.supabaseKey ? decValue(parsed.supabaseKey) : parsed.supabaseKey,
+      };
     }
   } catch {
     // ignore config file read error
@@ -117,20 +175,20 @@ function loadData() {
         memoryLogs = parsed.logs;
       }
       if (Array.isArray(parsed.tokens) && parsed.tokens.length > 0) {
-        memoryTokens = parsed.tokens;
+        memoryTokens = decTokens(parsed.tokens);
       }
       if (typeof parsed.masterKey === 'string' && parsed.masterKey.trim().length > 0) {
         memoryMasterKey = parsed.masterKey.trim();
       }
       if (parsed.providerKeys && typeof parsed.providerKeys === 'object') {
-        memoryProviderKeys = parsed.providerKeys;
+        memoryProviderKeys = decKeysRecord(parsed.providerKeys);
       } else {
         memoryProviderKeys = {};
       }
       setRuntimeStoredKeys(memoryProviderKeys);
 
       if (parsed.providerBaseUrls && typeof parsed.providerBaseUrls === 'object') {
-        memoryProviderBaseUrls = parsed.providerBaseUrls;
+        memoryProviderBaseUrls = decKeysRecord(parsed.providerBaseUrls);
       } else {
         memoryProviderBaseUrls = {};
       }
@@ -144,14 +202,14 @@ function loadData() {
       setRuntimeCfAccountId(memoryCfAccountId);
 
       if (Array.isArray(parsed.cfAccounts)) {
-        memoryCfAccounts = parsed.cfAccounts;
+        memoryCfAccounts = decCfAccounts(parsed.cfAccounts);
       } else {
         memoryCfAccounts = [];
       }
       setRuntimeCfAccounts(memoryCfAccounts);
 
       if (Array.isArray(parsed.providerAccounts)) {
-        memoryProviderAccounts = parsed.providerAccounts;
+        memoryProviderAccounts = decProviderAccounts(parsed.providerAccounts);
       } else {
         memoryProviderAccounts = [];
       }
@@ -329,26 +387,37 @@ async function persistToCloud(data: {
   }
 }
 
-function persistData() {
-  const data = {
+/**
+ * Builds the persistence payload with secrets encrypted at rest.
+ * In-memory state stays plaintext; only file/cloud copies are encrypted.
+ */
+function buildPersistedPayload() {
+  return {
     logs: memoryLogs.slice(0, 500), // retain latest 500 logs
-    tokens: memoryTokens,
+    tokens: encTokens(memoryTokens),
     masterKey: memoryMasterKey,
-    providerKeys: memoryProviderKeys,
-    providerBaseUrls: memoryProviderBaseUrls,
+    providerKeys: encKeysRecord(memoryProviderKeys),
+    providerBaseUrls: encKeysRecord(memoryProviderBaseUrls),
     cfAccountId: memoryCfAccountId,
-    cfAccounts: memoryCfAccounts,
-    providerAccounts: memoryProviderAccounts,
+    cfAccounts: encCfAccounts(memoryCfAccounts),
+    providerAccounts: encProviderAccounts(memoryProviderAccounts),
   };
+}
 
-
-  // 1. Local filesystem persistence
+function writeLocalCache() {
   try {
     const filePath = getDataFilePath();
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    fs.writeFileSync(filePath, JSON.stringify(buildPersistedPayload(), null, 2), 'utf-8');
   } catch {
     // serverless read-only fallback
   }
+}
+
+function persistData() {
+  const data = buildPersistedPayload();
+
+  // 1. Local filesystem persistence
+  writeLocalCache();
 
   // 2. Cloud DB persistence in background
   persistToCloud(data).catch(() => {});
@@ -385,7 +454,8 @@ export const db = {
 
   addToken(name: string): ClientToken {
     loadData();
-    const randomHex = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+    // Cryptographically secure token generation (API keys must not be guessable)
+    const randomHex = crypto.randomBytes(16).toString('hex');
     const newToken: ClientToken = {
       id: `tok-${Date.now()}`,
       name,
@@ -447,6 +517,20 @@ export const db = {
     return Boolean(found);
   },
 
+  /**
+   * Human-readable client label for request logs. Never stores raw credential
+   * material so public log endpoints cannot leak tokens or the master key.
+   */
+  describeClient(token: string): string {
+    if (!token) return 'Open Client';
+    const master = this.getMasterKey();
+    if (master && token === master) return 'Master Key';
+    loadData();
+    const found = memoryTokens.find((t) => t.token === token);
+    if (found) return `Client: ${found.name}`;
+    return 'Client (unknown)';
+  },
+
   // --- Aggregate Stats ---
   getStats() {
     loadData();
@@ -487,16 +571,16 @@ export const db = {
           const doc: any = await col.findOne({ _id: 'global_state' as any });
           if (doc) {
             if (Array.isArray(doc.logs)) memoryLogs = doc.logs;
-            if (Array.isArray(doc.tokens)) memoryTokens = doc.tokens;
+            if (Array.isArray(doc.tokens)) memoryTokens = decTokens(doc.tokens);
             if (typeof doc.masterKey === 'string' && doc.masterKey.trim().length > 0) {
               memoryMasterKey = doc.masterKey.trim();
             }
             if (doc.providerKeys && typeof doc.providerKeys === 'object') {
-              memoryProviderKeys = doc.providerKeys;
+              memoryProviderKeys = decKeysRecord(doc.providerKeys);
               setRuntimeStoredKeys(memoryProviderKeys);
             }
             if (doc.providerBaseUrls && typeof doc.providerBaseUrls === 'object') {
-              memoryProviderBaseUrls = doc.providerBaseUrls;
+              memoryProviderBaseUrls = decKeysRecord(doc.providerBaseUrls);
               setRuntimeStoredBaseUrls(memoryProviderBaseUrls);
             }
             if (typeof doc.cfAccountId === 'string') {
@@ -504,30 +588,16 @@ export const db = {
               setRuntimeCfAccountId(memoryCfAccountId);
             }
             if (Array.isArray(doc.cfAccounts)) {
-              memoryCfAccounts = doc.cfAccounts;
+              memoryCfAccounts = decCfAccounts(doc.cfAccounts);
               setRuntimeCfAccounts(memoryCfAccounts);
             }
             if (Array.isArray(doc.providerAccounts)) {
-              memoryProviderAccounts = doc.providerAccounts;
+              memoryProviderAccounts = decProviderAccounts(doc.providerAccounts);
               setRuntimeProviderAccounts(memoryProviderAccounts);
             }
             syncedSource = 'mongodb';
             // update local cache file
-            const filePath = getDataFilePath();
-            fs.writeFileSync(
-              filePath,
-              JSON.stringify({
-                logs: memoryLogs,
-                tokens: memoryTokens,
-                masterKey: memoryMasterKey,
-                providerKeys: memoryProviderKeys,
-                providerBaseUrls: memoryProviderBaseUrls,
-                cfAccountId: memoryCfAccountId,
-                cfAccounts: memoryCfAccounts,
-                providerAccounts: memoryProviderAccounts,
-              }),
-              'utf-8'
-            );
+            writeLocalCache();
             return {
               source: 'mongodb',
               logsCount: memoryLogs.length,
@@ -555,16 +625,16 @@ export const db = {
         if (data?.data && !error) {
           const state = data.data;
           if (Array.isArray(state.logs)) memoryLogs = state.logs;
-          if (Array.isArray(state.tokens)) memoryTokens = state.tokens;
+          if (Array.isArray(state.tokens)) memoryTokens = decTokens(state.tokens);
           if (typeof state.masterKey === 'string' && state.masterKey.trim().length > 0) {
             memoryMasterKey = state.masterKey.trim();
           }
           if (state.providerKeys && typeof state.providerKeys === 'object') {
-            memoryProviderKeys = state.providerKeys;
+            memoryProviderKeys = decKeysRecord(state.providerKeys);
             setRuntimeStoredKeys(memoryProviderKeys);
           }
           if (state.providerBaseUrls && typeof state.providerBaseUrls === 'object') {
-            memoryProviderBaseUrls = state.providerBaseUrls;
+            memoryProviderBaseUrls = decKeysRecord(state.providerBaseUrls);
             setRuntimeStoredBaseUrls(memoryProviderBaseUrls);
           }
           if (typeof state.cfAccountId === 'string') {
@@ -572,29 +642,15 @@ export const db = {
             setRuntimeCfAccountId(memoryCfAccountId);
           }
           if (Array.isArray(state.cfAccounts)) {
-            memoryCfAccounts = state.cfAccounts;
+            memoryCfAccounts = decCfAccounts(state.cfAccounts);
             setRuntimeCfAccounts(memoryCfAccounts);
           }
           if (Array.isArray(state.providerAccounts)) {
-            memoryProviderAccounts = state.providerAccounts;
+            memoryProviderAccounts = decProviderAccounts(state.providerAccounts);
             setRuntimeProviderAccounts(memoryProviderAccounts);
           }
           syncedSource = 'supabase';
-          const filePath = getDataFilePath();
-          fs.writeFileSync(
-            filePath,
-            JSON.stringify({
-              logs: memoryLogs,
-              tokens: memoryTokens,
-              masterKey: memoryMasterKey,
-              providerKeys: memoryProviderKeys,
-              providerBaseUrls: memoryProviderBaseUrls,
-              cfAccountId: memoryCfAccountId,
-              cfAccounts: memoryCfAccounts,
-              providerAccounts: memoryProviderAccounts,
-            }),
-            'utf-8'
-          );
+          writeLocalCache();
           return {
             source: 'supabase',
             logsCount: memoryLogs.length,
@@ -779,7 +835,17 @@ export const db = {
 
     try {
       const configPath = getDbConfigFilePath();
-      fs.writeFileSync(configPath, JSON.stringify(runtimeDbConfig, null, 2), 'utf-8');
+      // Encrypt connection secrets at rest
+      const persisted: DbConfig = {
+        ...runtimeDbConfig,
+        mongodbUri: runtimeDbConfig.mongodbUri
+          ? encValue(runtimeDbConfig.mongodbUri)
+          : runtimeDbConfig.mongodbUri,
+        supabaseKey: runtimeDbConfig.supabaseKey
+          ? encValue(runtimeDbConfig.supabaseKey)
+          : runtimeDbConfig.supabaseKey,
+      };
+      fs.writeFileSync(configPath, JSON.stringify(persisted, null, 2), 'utf-8');
     } catch (e) {
       console.error('Failed to save db-config.json:', e);
     }

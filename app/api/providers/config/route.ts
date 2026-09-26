@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { DEFAULT_PROVIDERS, getProviderApiKey } from '@/lib/config';
 
@@ -15,7 +16,10 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = requireAuth(req, CORS_HEADERS);
+  if (denied) return denied;
+
   try {
     const settings = db.getProviderSettings();
 
@@ -46,6 +50,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const denied = requireAuth(req, CORS_HEADERS);
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const {

@@ -2,13 +2,20 @@ import crypto from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
-const TAG_LENGTH = 16;
+
+// scrypt key derivation is expensive; memoize per-secret so repeated
+// encrypt/decrypt calls (e.g. loading many stored keys) stay fast.
+const derivedKeyCache = new Map<string, Buffer>();
 
 /**
  * Derives a 32-byte key from master secret
  */
 function getKey(secret: string): Buffer {
-  return crypto.scryptSync(secret, '9router-salt-salt-2026', 32);
+  const cached = derivedKeyCache.get(secret);
+  if (cached) return cached;
+  const key = crypto.scryptSync(secret, '9router-salt-salt-2026', 32);
+  derivedKeyCache.set(secret, key);
+  return key;
 }
 
 /**
@@ -48,7 +55,7 @@ export function decrypt(cipherText: string, secret?: string): string {
     let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
     return decrypted;
-  } catch (err) {
+  } catch {
     // If decryption fails (e.g. wrong key), return raw or empty
     return cipherText;
   }

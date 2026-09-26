@@ -1,3 +1,4 @@
+import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { NextRequest } from 'next/server';
 
@@ -15,6 +16,9 @@ export async function OPTIONS() {
 }
 
 export async function GET(req: NextRequest) {
+  const denied = requireAuth(req, CORS_HEADERS);
+  if (denied) return denied;
+
   const url = new URL(req.url);
   const limit = parseInt(url.searchParams.get('limit') || '100', 10);
 
@@ -30,7 +34,10 @@ export async function GET(req: NextRequest) {
   );
 }
 
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
+  const denied = requireAuth(req, CORS_HEADERS);
+  if (denied) return denied;
+
   db.clearLogs();
   return new Response(
     JSON.stringify({ success: true, message: 'Logs cleared' }),

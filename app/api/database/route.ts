@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 
 export const runtime = 'nodejs';
@@ -14,7 +15,10 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = requireAuth(req, CORS_HEADERS);
+  if (denied) return denied;
+
   try {
     const status = await db.getDatabaseStatus();
     return NextResponse.json(status, { headers: CORS_HEADERS });
@@ -27,6 +31,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const denied = requireAuth(req, CORS_HEADERS);
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const { action } = body;

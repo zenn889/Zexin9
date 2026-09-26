@@ -1,5 +1,6 @@
 import { executeProviderCall } from '@/lib/router';
 import { ChatCompletionRequest, ProviderId } from '@/lib/types';
+import { requireAuth } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -32,6 +33,9 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = requireAuth(req, CORS_HEADERS);
+  if (denied) return denied;
+
   try {
     const { provider, apiKey, baseUrl, accountId, model } = await req.json();
 

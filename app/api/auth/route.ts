@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { extractClientToken } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -8,6 +9,22 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': '*',
 };
+
+/**
+ * Builds the dashboard auth cookie. The Secure flag is added whenever the
+ * request arrived over HTTPS (directly or via a proxy) so the credential is
+ * never sent over plain HTTP in production.
+ */
+function buildAuthCookie(
+  name: string,
+  value: string,
+  req: NextRequest,
+  maxAgeSeconds: number
+): string {
+  const proto = (req.headers.get('x-forwarded-proto') || '').split(',')[0].trim();
+  const secure = proto === 'https' ? '; Secure' : '';
+  return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secure}`;
+}
 
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -72,21 +89,17 @@ export async function POST(req: NextRequest) {
         { status: 200, headers: jsonHeaders }
       );
       // Set cookie for 30 days
-      response.headers.append(
-        'Set-Cookie',
-        `zexin9_auth=${encodeURIComponent(keyToSet)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}`
-      );
-      response.headers.append(
-        'Set-Cookie',
-        `9router_auth=${encodeURIComponent(keyToSet)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}`
-      );
+      const maxAge = 30 * 24 * 3600;
+      response.headers.append('Set-Cookie', buildAuthCookie('zexin9_auth', keyToSet, req, maxAge));
+      response.headers.append('Set-Cookie', buildAuthCookie('9router_auth', keyToSet, req, maxAge));
       return response;
     }
 
     // 2. Change Key (if logged in and wants to update key)
     if (action === 'change') {
       const authCookie = req.cookies.get('zexin9_auth')?.value || req.cookies.get('9router_auth')?.value;
-      if (authCookie !== currentSecret) {
+      const provided = authCookie || extractClientToken(req);
+      if (provided !== currentSecret) {
         return new Response(
           JSON.stringify({ success: false, error: 'Unauthorized to change key' }),
           { status: 401, headers: jsonHeaders }
@@ -103,14 +116,9 @@ export async function POST(req: NextRequest) {
         JSON.stringify({ success: true, message: 'Access Key berhasil diperbarui!' }),
         { status: 200, headers: jsonHeaders }
       );
-      response.headers.append(
-        'Set-Cookie',
-        `zexin9_auth=${encodeURIComponent(newKey.trim())}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}`
-      );
-      response.headers.append(
-        'Set-Cookie',
-        `9router_auth=${encodeURIComponent(newKey.trim())}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}`
-      );
+      const maxAge = 30 * 24 * 3600;
+      response.headers.append('Set-Cookie', buildAuthCookie('zexin9_auth', newKey.trim(), req, maxAge));
+      response.headers.append('Set-Cookie', buildAuthCookie('9router_auth', newKey.trim(), req, maxAge));
       return response;
     }
 
@@ -120,14 +128,9 @@ export async function POST(req: NextRequest) {
         JSON.stringify({ success: true, message: 'Akses Diberikan!' }),
         { status: 200, headers: jsonHeaders }
       );
-      response.headers.append(
-        'Set-Cookie',
-        `zexin9_auth=${encodeURIComponent(currentSecret)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}`
-      );
-      response.headers.append(
-        'Set-Cookie',
-        `9router_auth=${encodeURIComponent(currentSecret)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}`
-      );
+      const maxAge = 30 * 24 * 3600;
+      response.headers.append('Set-Cookie', buildAuthCookie('zexin9_auth', currentSecret, req, maxAge));
+      response.headers.append('Set-Cookie', buildAuthCookie('9router_auth', currentSecret, req, maxAge));
       return response;
     }
 

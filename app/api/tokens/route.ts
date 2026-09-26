@@ -1,3 +1,4 @@
+import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { NextRequest } from 'next/server';
 
@@ -14,7 +15,10 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = requireAuth(req, CORS_HEADERS);
+  if (denied) return denied;
+
   const tokens = db.getTokens();
   return new Response(
     JSON.stringify({ success: true, tokens }),
@@ -23,6 +27,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = requireAuth(req, CORS_HEADERS);
+  if (denied) return denied;
+
   try {
     const { name } = await req.json();
     if (!name || typeof name !== 'string') {
@@ -46,6 +53,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const denied = requireAuth(req, CORS_HEADERS);
+  if (denied) return denied;
+
   try {
     const { id } = await req.json();
     if (!id) {
