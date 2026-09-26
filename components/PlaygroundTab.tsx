@@ -578,6 +578,17 @@ export function PlaygroundTab({
         if (urlVal && urlVal.trim()) headers[`x-${pId}-base-url`] = urlVal.trim();
       });
 
+      // Always send Cloudflare Account ID so router can build the correct base URL
+      if (typeof window !== 'undefined') {
+        const cfAccountId =
+          localStorage.getItem('zexin9_cf_account_id') ||
+          localStorage.getItem('9router_cf_account_id') ||
+          '';
+        if (cfAccountId.trim()) {
+          headers['x-cloudflare-account-id'] = cfAccountId.trim();
+        }
+      }
+
       // Prepare API messages
       const apiMessages = newMessages
         .filter((m) => m.role !== 'system')

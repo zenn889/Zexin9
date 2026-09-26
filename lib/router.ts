@@ -335,9 +335,14 @@ export async function executeProviderAccountPoolCall(
 
     // Determine effective Base URL for this specific account
     let baseUrl = account.baseUrl;
-    if (!baseUrl) {
+    if (!baseUrl || baseUrl.includes('{account_id}')) {
       if (provider === 'cloudflare') {
-        const accId = account.accountId || getCloudflareAccountId(headerKeys);
+        // Try account.accountId first, then fall back to header
+        const accId = (account.accountId || '').trim() || getCloudflareAccountId(headerKeys) || '';
+        if (!accId) {
+          poolErrors.push(`Akun "${account.name}": Cloudflare Account ID tidak ditemukan. Isi Account ID di tab Provider Tiers.`);
+          continue;
+        }
         baseUrl = `https://api.cloudflare.com/client/v4/accounts/${accId}/ai/v1`;
       } else {
         baseUrl = getProviderBaseUrl(provider, headerKeys);

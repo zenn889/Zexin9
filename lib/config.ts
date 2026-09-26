@@ -525,15 +525,17 @@ export function getEffectiveCloudflareAccounts(
   const singleKey = getProviderApiKey('cloudflare', headerKeys);
   const singleAccId = getCloudflareAccountId(headerKeys);
   if (singleKey && singleAccId && !accounts.some((a) => a.accountId === singleAccId.trim())) {
+    const resolvedAccId = singleAccId.trim();
     accounts.unshift({
       id: 'cf-default',
       name: 'Cloudflare Default Account',
-      accountId: singleAccId.trim(),
+      accountId: resolvedAccId,
       apiToken: singleKey.trim(),
       enabled: true,
     });
   }
 
+  // Ensure every account has a fully resolved baseUrl so pool call never uses {account_id} literal
   return accounts;
 }
 
@@ -649,13 +651,22 @@ export function getEffectiveProviderAccounts(
     const keys = getProviderApiKeys(p, headerKeys);
     keys.forEach((key, kIdx) => {
       if (!accounts.some((a) => a.provider === p && a.apiKey === key)) {
+        // For Cloudflare: resolve accountId and build a concrete baseUrl (no {account_id} placeholder)
+        let accountId: string | undefined = undefined;
+        let baseUrl = getProviderBaseUrl(p, headerKeys);
+        if (p === 'cloudflare') {
+          accountId = (getCloudflareAccountId(headerKeys) || '').trim() || undefined;
+          if (accountId) {
+            baseUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1`;
+          }
+        }
         accounts.push({
           id: `auto-${p}-${kIdx}`,
           provider: p,
           name: keys.length > 1 ? `${p.toUpperCase()} Key #${kIdx + 1}` : `${p.toUpperCase()} Main`,
           apiKey: key,
-          accountId: p === 'cloudflare' ? getCloudflareAccountId(headerKeys) : undefined,
-          baseUrl: getProviderBaseUrl(p, headerKeys),
+          accountId,
+          baseUrl,
           enabled: true,
         });
       }
