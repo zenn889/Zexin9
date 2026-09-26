@@ -1705,6 +1705,16 @@ export function ProvidersTab({
                               <span>Failed ({ping.status || 'Err'})</span>
                             </span>
                           )}
+                          {ping && !ping.loading && !ping.success && ping.error && (
+                            <div className="mt-0.5 text-[10px] text-rose-300/90 break-words">
+                              {ping.error.length > 200 ? `${ping.error.slice(0, 200)}…` : ping.error}
+                            </div>
+                          )}
+                          {ping && !ping.loading && !ping.success && (ping.tried?.length || 0) > 1 && (
+                            <div className="mt-0.5 text-[10px] text-slate-400 break-all">
+                              Dicoba: {ping.tried!.join(', ')}
+                            </div>
+                          )}
                           {ping && !ping.loading && !ping.success && (ping.modelsFound?.length || 0) > 0 && (
                             <div className="mt-1 text-[10px] text-amber-300/90 break-all">
                               Model tersedia: {ping.modelsFound!.slice(0, 5).join(', ')}

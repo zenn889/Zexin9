@@ -51,13 +51,17 @@ function jsonResponse(payload: Record<string, unknown>): Response {
   });
 }
 
-/** Heuristic: does this error mean "this model does not exist on the endpoint"? */
+/** Heuristic: does this error mean "this model is not usable right now"? */
 function looksLikeModelError(status: number, text: string): boolean {
   if (status === 404) return true;
+  // Some reseller gateways report unavailable models/channels as 409 Conflict
+  // ("model is currently unavailable / channel busy") — retrying another
+  // discovered model is the right move for a test ping.
+  if (status === 409) return true;
   if (!text) return false;
   const t = text.toLowerCase();
   if (!t.includes('model')) return false;
-  return /(not found|does not exist|not exist|unknown|invalid|no such|unsupported|tidak ditemukan|tidak ada)/.test(t);
+  return /(not found|does not exist|not exist|unknown|invalid|no such|unsupported|unavailable|busy|conflict|tidak ditemukan|tidak ada)/.test(t);
 }
 
 /** Runs one chat ping against the provider through the router (with timeout). */
@@ -231,12 +235,15 @@ export async function POST(req: NextRequest) {
     // Failure payload — include what was tried and which models the endpoint offers,
     // so the dashboard can show actionable information instead of a raw error blob.
     let hint: string | undefined;
+    const status409 = finalAttempt?.status === 409;
     if (isCustom && modelsFound.length === 0) {
-      hint =
-        'Endpoint tidak menyediakan daftar model (/models) atau tidak bisa diakses. ' +
-        'Isi nama model secara manual di kolom model, lalu tes ulang.';
+      hint = status409
+        ? '409 Conflict: endpoint menganggap model ini sedang tidak tersedia (model belum siap atau saluran sibuk). Coba lagi beberapa saat, atau isi nama model lain.'
+        : 'Endpoint tidak menyediakan daftar model (/models) atau tidak bisa diakses. Isi nama model secara manual di kolom model, lalu tes ulang.';
     } else if (modelsFound.length > 0 && !usedModel) {
-      hint = `Endpoint Anda menyediakan ${modelsFound.length} model — pilih salah satu dari daftar di atas.`;
+      hint = status409
+        ? `409 Conflict: endpoint menolak model ini (belum siap/saluran sibuk). Ada ${modelsFound.length} model lain yang tersedia — pilih salah satu dari daftar di atas.`
+        : `Endpoint Anda menyediakan ${modelsFound.length} model — pilih salah satu dari daftar di atas.`;
     }
 
     return jsonResponse({
