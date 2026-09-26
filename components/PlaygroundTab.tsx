@@ -206,6 +206,10 @@ export function PlaygroundTab({
 
   // --- User Custom Models ---
   const [userCustomModels, setUserCustomModels] = useState<Record<string, string[]>>({});
+  // Models that a live provider ping actually got answers from (written by the
+  // Providers tab) — shown with ✅ in the model dropdown so users pick models
+  // that are known to work on their endpoint.
+  const [verifiedModels, setVerifiedModels] = useState<Record<string, string[]>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom
@@ -227,6 +231,16 @@ export function PlaygroundTab({
       if (storedUserModels) {
         try {
           setUserCustomModels(JSON.parse(storedUserModels));
+        } catch {
+          // ignore
+        }
+      }
+
+      // Load verified models (written by the Providers tab after a successful ping)
+      const storedVerified = localStorage.getItem('zexin9_verified_models');
+      if (storedVerified) {
+        try {
+          setVerifiedModels(JSON.parse(storedVerified));
         } catch {
           // ignore
         }
@@ -975,6 +989,7 @@ export function PlaygroundTab({
                 </optgroup>
                 {DEFAULT_PROVIDERS.map((p) => {
                   const customList = userCustomModels[p.id] || [];
+                  const verifiedList = verifiedModels[p.id] || [];
                   return (
                     <optgroup key={p.id} label={`🔹 ${p.name}`}>
                       {p.models.map((m) => (
@@ -984,7 +999,7 @@ export function PlaygroundTab({
                       ))}
                       {customList.map((m) => (
                         <option key={`${p.id}-custom-${m}`} value={m}>
-                          ⭐ {m}
+                          {verifiedList.includes(m) ? '✅' : '⭐'} {m}
                         </option>
                       ))}
                     </optgroup>
@@ -1275,6 +1290,18 @@ export function PlaygroundTab({
                         >
                           ⚠️ Fallback ×{msg.meta.fallbackCount}
                         </span>
+                      )}
+                      {Boolean(msg.meta.fallbackCount) && msg.meta.failures && (
+                        <div className="w-full text-[10px] font-mono text-amber-200/80 leading-relaxed break-words">
+                          {msg.meta.failures
+                            .split('|')
+                            .map((f) => f.trim())
+                            .filter(Boolean)
+                            .slice(0, 3)
+                            .map((f, i) => (
+                              <div key={i}>• {f}</div>
+                            ))}
+                        </div>
                       )}
                       {msg.meta.durationMs !== undefined && (
                         <span className="flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-slate-900 text-slate-300 border border-slate-800">

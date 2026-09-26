@@ -165,26 +165,36 @@ export async function POST(req: NextRequest) {
     let modelsFound: string[] = [];
     let last: AttemptResult | null = null;
     let usedModel = '';
+    let usedAttempt: AttemptResult | null = null;
+    /** Per-model verification results, reported to the dashboard. */
+    const attemptResults: Array<{ model: string; ok: boolean; status: number }> = [];
 
     const getLast = (): AttemptResult | null => last;
 
     const attempt = async (m: string): Promise<AttemptResult> => {
       tried.push(m);
       last = await runChatAttempt(providerId, m, headerKeys);
+      attemptResults.push({ model: m, ok: last.ok, status: last.status });
       return last;
     };
 
     // 1. Try the model chosen in the UI first (when provided).
     if (requestedModel) {
       const r = await attempt(requestedModel);
-      if (r.ok) usedModel = requestedModel;
+      if (r.ok) {
+        usedModel = requestedModel;
+        usedAttempt = r;
+      }
     }
 
     // 2. Built-in providers without a requested model keep the legacy default model.
     if (!usedModel && !isCustom && !requestedModel) {
       const fallback = TEST_MODELS[providerId] || 'gpt-4o-mini';
       const r = await attempt(fallback);
-      if (r.ok) usedModel = fallback;
+      if (r.ok) {
+        usedModel = fallback;
+        usedAttempt = r;
+      }
     }
 
     // 3. Auto-discover models from the endpoint's /models listing. This is what
@@ -215,6 +225,7 @@ export async function POST(req: NextRequest) {
         const r = await attempt(cand);
         if (r.ok) {
           usedModel = cand;
+          usedAttempt = r;
           break;
         }
         // Stop burning requests when the failure is not model-related (auth, network, ...)
@@ -222,22 +233,33 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const finalAttempt = getLast();
+    // 4. Verify the REMAINING discovered models (custom endpoints only) so a green
+    //    ping cannot hide models that are listed but actually broken (429 quota,
+    //    404, channel unavailable...). Bounded by the same overall attempt cap.
+    if (usedModel && isCustom) {
+      for (const cand of modelsFound) {
+        if (cand === usedModel || tried.includes(cand)) continue;
+        if (tried.length >= MAX_CHAT_ATTEMPTS) break;
+        await attempt(cand);
+      }
+    }
 
-    if (usedModel && finalAttempt?.ok) {
+    if (usedModel && usedAttempt) {
       return jsonResponse({
         success: true,
-        status: finalAttempt.status,
-        latency: finalAttempt.latency,
+        status: usedAttempt.status,
+        latency: usedAttempt.latency,
         model: usedModel,
         tried,
         modelsFound,
-        ...(finalAttempt.protocol ? { protocol: finalAttempt.protocol } : {}),
+        modelStatuses: attemptResults,
+        ...(usedAttempt.protocol ? { protocol: usedAttempt.protocol } : {}),
       });
     }
 
     // Failure payload — include what was tried and which models the endpoint offers,
     // so the dashboard can show actionable information instead of a raw error blob.
+    const finalAttempt = getLast();
     let hint: string | undefined;
     const status409 = finalAttempt?.status === 409;
     const route404 =
@@ -266,6 +288,7 @@ export async function POST(req: NextRequest) {
           : 'Tidak ada model yang berhasil dites. Isi nama model secara manual di kolom model.'),
       tried,
       modelsFound,
+      modelStatuses: attemptResults,
       ...(hint ? { hint } : {}),
     });
   } catch (err: any) {

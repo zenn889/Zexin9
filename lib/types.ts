@@ -95,6 +95,8 @@ export interface ProviderAccount {
   lastTested?: string;
   /** Models discovered from the endpoint's /models listing (auto-detection). */
   detectedModels?: string[];
+  /** Models that a live ping actually got a successful response from. */
+  verifiedModels?: string[];
   /** ISO timestamp of the last successful model auto-detection. */
   lastDetectedAt?: string;
   lastStatus?: 'ok' | 'rate_limited' | 'error';

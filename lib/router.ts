@@ -384,6 +384,10 @@ async function callCustomWithProtocolFallback(
   try {
     const alt = await callAnthropic(baseUrl, apiKey, request, signal);
     if (alt.ok) return tagUpstreamProtocol(alt, 'anthropic-messages');
+    // Both formats failed. Prefer the Anthropic response when it carries a more
+    // specific failure (401 auth, 429 quota, 400 bad model) than the blanket
+    // route-level 404 — it tells the user what actually went wrong.
+    if (alt.status !== 404) return alt;
   } catch {
     // fall through to the original response below
   }

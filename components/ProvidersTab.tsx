@@ -124,6 +124,8 @@ interface PingResult {
   hint?: string;
   /** Upstream protocol that served the ping (e.g. 'anthropic-messages'). */
   protocol?: string;
+  /** Per-model verification results from the ping. */
+  modelStatuses?: Array<{ model?: string; ok?: boolean; status?: number }>;
 }
 
 export function ProvidersTab({
@@ -172,6 +174,8 @@ export function ProvidersTab({
   const [selectedModels, setSelectedModels] = useState<Record<string, string>>({});
   const [customModelInputs, setCustomModelInputs] = useState<Record<string, string>>({});
   const [userCustomModels, setUserCustomModels] = useState<Record<string, string[]>>({});
+  // Models a live ping got answers from (persisted to localStorage) — ✅ chips.
+  const [verifiedModels, setVerifiedModels] = useState<Record<string, string[]>>({});
   const [newModelInput, setNewModelInput] = useState<Record<string, string>>({});
   const [pingResults, setPingResults] = useState<Record<string, PingResult>>({});
   const [copiedEnv, setCopiedEnv] = useState(false);
@@ -244,6 +248,15 @@ export function ProvidersTab({
       if (storedUserModels) {
         try {
           setUserCustomModels(JSON.parse(storedUserModels));
+        } catch {
+          // ignore error
+        }
+      }
+
+      const storedVerifiedModels = localStorage.getItem('zexin9_verified_models');
+      if (storedVerifiedModels) {
+        try {
+          setVerifiedModels(JSON.parse(storedVerifiedModels));
         } catch {
           // ignore error
         }
@@ -477,13 +490,22 @@ export function ProvidersTab({
       });
       const data = await res.json();
       const found: string[] = Array.isArray(data?.modelsFound) ? data.modelsFound : [];
+      const statuses: Array<{ model?: string; ok?: boolean; status?: number }> =
+        Array.isArray(data?.modelStatuses) ? data.modelStatuses : [];
+      const verified = Array.from(
+        new Set(statuses.filter((s) => s?.ok && s?.model).map((s) => String(s.model)))
+      );
       if (data?.success && data?.model) {
         rememberDiscoveredModels(acc.provider, [data.model, ...found]);
+        if (verified.length > 0) rememberVerifiedModels(acc.provider, verified);
         const merged = Array.from(
           new Set([...(acc.detectedModels || []), ...found, data.model].filter(Boolean))
         );
         updateAccount(acc.id, {
           detectedModels: merged,
+          ...(verified.length > 0
+            ? { verifiedModels: Array.from(new Set([...(acc.verifiedModels || []), ...verified])) }
+            : {}),
           lastDetectedAt: new Date().toISOString(),
           lastStatus: 'ok',
           latencyMs: data.latency,
@@ -513,6 +535,7 @@ export function ProvidersTab({
           modelsFound: data.modelsFound,
           hint: data.hint,
           protocol: data.protocol,
+          modelStatuses: data.modelStatuses,
         },
       }));
     } catch (err: any) {
@@ -612,6 +635,24 @@ export function ProvidersTab({
     rememberDiscoveredModels(providerId, [model]);
   };
 
+  // Records which models a live ping actually got answers from (localStorage map
+  // consumed by the Playground to mark ✅ vs ⭐ in the model dropdown).
+  const rememberVerifiedModels = (providerId: string, models: string[]) => {
+    const cleaned = Array.from(
+      new Set((models || []).map((m) => String(m ?? '').trim()).filter((m) => m.length > 0))
+    );
+    if (cleaned.length === 0 || typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem('zexin9_verified_models');
+      const map = raw ? JSON.parse(raw) || {} : {};
+      const existing: string[] = Array.isArray(map[providerId]) ? map[providerId] : [];
+      map[providerId] = Array.from(new Set([...existing, ...cleaned]));
+      localStorage.setItem('zexin9_verified_models', JSON.stringify(map));
+    } catch {
+      // ignore storage errors
+    }
+  };
+
   // "Auto Deteksi" in the add-account form: probes the endpoint with the key and
   // base URL currently typed in, then lists the models it reports.
   const handleFormDetect = async () => {
@@ -630,6 +671,12 @@ export function ProvidersTab({
       });
       const data = await res.json();
       const found: string[] = Array.isArray(data?.modelsFound) ? data.modelsFound : [];
+      const detectedStatuses: Array<{ model?: string; ok?: boolean; status?: number }> =
+        Array.isArray(data?.modelStatuses) ? data.modelStatuses : [];
+      const detectedVerified = Array.from(
+        new Set(detectedStatuses.filter((s) => s?.ok && s?.model).map((s) => String(s.model)))
+      );
+      if (detectedVerified.length > 0) rememberVerifiedModels(newAccProvider, detectedVerified);
       if (found.length > 0) {
         setFormDetectedModels(found);
         rememberDiscoveredModels(newAccProvider, found);
@@ -638,6 +685,10 @@ export function ProvidersTab({
           ok: true,
           text: `✓ ${found.length} model terdeteksi: ${found.slice(0, 8).join(', ')}${
             found.length > 8 ? ` (+${found.length - 8} lagi)` : ''
+          }${
+            detectedVerified.length > 0 && detectedVerified.length < found.length
+              ? ` · terverifikasi jalan: ${detectedVerified.slice(0, 4).join(', ')}`
+              : ''
           }`,
         });
       } else if (data?.success) {
@@ -765,6 +816,12 @@ export function ProvidersTab({
       if (providerId === 'custom') {
         const found: string[] = Array.isArray(data?.modelsFound) ? data.modelsFound : [];
         if (found.length > 0) rememberDiscoveredModels(providerId, found);
+        const statuses: Array<{ model?: string; ok?: boolean; status?: number }> =
+          Array.isArray(data?.modelStatuses) ? data.modelStatuses : [];
+        const verified = Array.from(
+          new Set(statuses.filter((s) => s?.ok && s?.model).map((s) => String(s.model)))
+        );
+        if (verified.length > 0) rememberVerifiedModels(providerId, verified);
         if (data?.success && data?.model) {
           rememberDiscoveredModels(providerId, [data.model]);
           if (!modelToTest || modelToTest === data.model) {
@@ -785,6 +842,7 @@ export function ProvidersTab({
           modelsFound: data.modelsFound,
           hint: data.hint,
           protocol: data.protocol,
+          modelStatuses: data.modelStatuses,
         },
       }));
     } catch (err: any) {
@@ -1325,6 +1383,20 @@ export function ProvidersTab({
                                   }`
                                 : `✗ ${ping.error?.slice(0, 200) || 'Error'}`}
                             </div>
+                            {ping.success && (ping.modelStatuses?.length || 0) > 1 && (
+                              <div className="mt-0.5 text-[10px] break-all leading-relaxed">
+                                {ping.modelStatuses!.some((s) => s.ok) && (
+                                  <div className="text-emerald-300/90">
+                                    ✅ Bekerja: {ping.modelStatuses!.filter((s) => s.ok).map((s) => s.model).join(', ')}
+                                  </div>
+                                )}
+                                {ping.modelStatuses!.some((s) => !s.ok) && (
+                                  <div className="text-rose-300/90">
+                                    ❌ Gagal dites: {ping.modelStatuses!.filter((s) => !s.ok).map((s) => `${s.model}${s.status ? ` (${s.status})` : ''}`).join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                             {!ping.success && (ping.modelsFound?.length || 0) > 0 && (
                               <div className="mt-0.5 text-amber-300/90 break-all">
                                 Model tersedia: {ping.modelsFound!.slice(0, 5).join(', ')}
@@ -1773,6 +1845,7 @@ export function ProvidersTab({
                           {[...provider.models, ...(userCustomModels[provider.id] || [])].map((m) => {
                             const isSelected = activeModel === m;
                             const isUserCustom = (userCustomModels[provider.id] || []).includes(m);
+                            const isVerified = isUserCustom && (verifiedModels[provider.id] || []).includes(m);
                             return (
                               <span
                                 key={m}
@@ -1782,10 +1855,10 @@ export function ProvidersTab({
                                     ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-semibold shadow-sm'
                                     : 'bg-white/[0.03] text-slate-400 hover:text-slate-200 border-white/[0.06] hover:border-white/[0.12]'
                                 }`}
-                                title={`Klik untuk pilih model: ${m}`}
+                                title={`Klik untuk pilih model: ${m}${isVerified ? ' (terverifikasi ✅ sudah dijawab endpoint)' : ''}`}
                               >
                                 {isSelected && <Check className="w-3 h-3 text-cyan-400 shrink-0" />}
-                                <span>{m}</span>
+                                <span>{isVerified ? '✅ ' : ''}{m}</span>
                                 {isUserCustom && (
                                   <button
                                     type="button"
@@ -1888,6 +1961,20 @@ export function ProvidersTab({
                                 {ping.protocol === 'anthropic-messages' ? ' · format Anthropic' : ''}
                               </span>
                             </span>
+                          )}
+                          {ping && !ping.loading && ping.success && (ping.modelStatuses?.length || 0) > 1 && (
+                            <div className="mt-0.5 text-[10px] break-all leading-relaxed">
+                              {ping.modelStatuses!.some((s) => s.ok) && (
+                                <div className="text-emerald-300/90">
+                                  ✅ Bekerja: {ping.modelStatuses!.filter((s) => s.ok).map((s) => s.model).join(', ')}
+                                </div>
+                              )}
+                              {ping.modelStatuses!.some((s) => !s.ok) && (
+                                <div className="text-rose-300/90">
+                                  ❌ Gagal dites: {ping.modelStatuses!.filter((s) => !s.ok).map((s) => `${s.model}${s.status ? ` (${s.status})` : ''}`).join(', ')}
+                                </div>
+                              )}
+                            </div>
                           )}
                           {ping && !ping.loading && !ping.success && (
                             <span className="text-rose-400 flex items-center space-x-1" title={ping.error}>
