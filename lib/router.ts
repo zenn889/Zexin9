@@ -473,9 +473,9 @@ export async function routeChatCompletion(
     }
 
     try {
-      // Execute provider call with 30s timeout for serverless
+      // Execute provider call with 110s timeout for serverless (streaming can be long)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), 110000);
 
       // Execute across the provider's multi-account pool with automatic account failover
       const poolResult = await executeProviderAccountPoolCall(

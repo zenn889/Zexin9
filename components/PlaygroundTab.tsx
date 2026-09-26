@@ -673,29 +673,63 @@ export function PlaygroundTab({
           let buffer = '';
           while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
 
-            buffer += decoder.decode(value, { stream: true });
+            // Flush remaining bytes from TextDecoder on stream end
+            if (done) {
+              const remaining = decoder.decode(undefined, { stream: false });
+              if (remaining) buffer += remaining;
+            } else {
+              buffer += decoder.decode(value, { stream: true });
+            }
+
+            // Process all complete lines in buffer
             const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
+            // Keep last incomplete line in buffer (unless done, then process everything)
+            buffer = done ? '' : (lines.pop() || '');
 
             for (const line of lines) {
               const trimmed = line.trim();
               if (!trimmed.startsWith('data:')) continue;
               const dataStr = trimmed.slice(5).trim();
-              if (dataStr === '[DONE]') continue;
+              if (!dataStr || dataStr === '[DONE]') continue;
 
               try {
                 const chunk = JSON.parse(dataStr);
                 const delta =
                   chunk.choices?.[0]?.delta?.content ||
-                  chunk.choices?.[0]?.delta?.reasoning_content;
+                  chunk.choices?.[0]?.delta?.reasoning_content ||
+                  chunk.choices?.[0]?.text;
                 if (delta) {
                   accumulatedText += delta;
                   setCurrentResponse(accumulatedText);
                 }
               } catch {
-                // Ignore parse errors
+                // Ignore parse errors on individual SSE lines
+              }
+            }
+
+            if (done) break;
+          }
+
+          // Process any leftover buffer content after stream ends
+          if (buffer.trim()) {
+            const trimmed = buffer.trim();
+            if (trimmed.startsWith('data:')) {
+              const dataStr = trimmed.slice(5).trim();
+              if (dataStr && dataStr !== '[DONE]') {
+                try {
+                  const chunk = JSON.parse(dataStr);
+                  const delta =
+                    chunk.choices?.[0]?.delta?.content ||
+                    chunk.choices?.[0]?.delta?.reasoning_content ||
+                    chunk.choices?.[0]?.text;
+                  if (delta) {
+                    accumulatedText += delta;
+                    setCurrentResponse(accumulatedText);
+                  }
+                } catch {
+                  // ignore
+                }
               }
             }
           }

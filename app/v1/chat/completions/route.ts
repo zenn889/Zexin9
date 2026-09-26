@@ -5,7 +5,7 @@ import { ChatCompletionRequest } from '@/lib/types';
 import { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
