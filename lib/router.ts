@@ -71,13 +71,17 @@ export function normalizeModelForProvider(provider: ProviderId, model: string): 
     if (mLower.includes('r1') || mLower.includes('deepseek')) {
       return '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b';
     }
-    if (mLower.includes('70b')) {
-      return '@cf/meta/llama-3.3-70b-instruct';
-    }
     if (mLower.includes('coder') || mLower.includes('qwen')) {
       return '@cf/qwen/qwen2.5-coder-32b-instruct';
     }
-    return '@cf/meta/llama-3.3-70b-instruct';
+    if (mLower.includes('llama-4') || mLower.includes('scout') || mLower.includes('maverick')) {
+      return '@cf/meta/llama-4-scout-17b-16e-instruct';
+    }
+    if (mLower.includes('8b') || mLower.includes('1b') || mLower.includes('3b')) {
+      return '@cf/meta/llama-3.1-8b-instruct-fp8';
+    }
+    // Default: llama-3.3-70b fp8-fast (the correct, non-deprecated name)
+    return '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
   }
 
   if (provider === 'siliconflow') {
@@ -234,11 +238,12 @@ export function resolveCandidates(
     candidates.push({ provider: 'cloudflare', model: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b' });
     candidates.push({ provider: 'gemini', model: 'gemini-2.0-flash' });
     candidates.push({ provider: 'openai', model: 'gpt-4o-mini' });
-  } else if (modelLower.startsWith('llama') || modelLower.startsWith('mixtral') || modelLower.startsWith('qwen')) {
+  } else if (
+    modelLower.startsWith('llama') || modelLower.startsWith('mixtral') || modelLower.startsWith('qwen')) {
     candidates.push({ provider: 'groq', model: requestedModel });
     candidates.push({ provider: 'cerebras', model: 'llama-3.3-70b' });
     candidates.push({ provider: 'together', model: requestedModel });
-    candidates.push({ provider: 'cloudflare', model: '@cf/meta/llama-3.3-70b-instruct' });
+    candidates.push({ provider: 'cloudflare', model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast' });
     candidates.push({ provider: 'siliconflow', model: requestedModel });
     candidates.push({ provider: 'openrouter', model: requestedModel });
     candidates.push({ provider: 'deepseek', model: 'deepseek-chat' });

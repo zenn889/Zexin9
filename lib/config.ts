@@ -151,13 +151,12 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     enabled: true,
     priority: 9,
     models: [
+      '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+      '@cf/meta/llama-3.1-8b-instruct-fp8',
+      '@cf/meta/llama-4-scout-17b-16e-instruct',
       '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',
-      '@cf/meta/llama-3.3-70b-instruct',
       '@cf/qwen/qwen2.5-coder-32b-instruct',
-      '@cf/meta/llama-3.1-8b-instruct',
-      '@cf/meta/llama-3.1-70b-instruct',
-      '@cf/mistral/mistral-7b-instruct-v0.1',
-      '@cf/google/gemma-7b-it',
+      '@cf/google/gemma-3-12b-it',
     ],
   },
   {
@@ -226,7 +225,7 @@ export const DEFAULT_FALLBACK_GROUPS: ModelFallbackGroup[] = [
   {
     id: 'auto-smart',
     name: 'Auto Smart (Best for Coding & Cursor/Cline)',
-    description: 'Cascades through top frontier models: Claude 3.7/3.5 -> GPT-4o -> DeepSeek V3 -> Gemini 2.0 Flash',
+    description: 'Cascades through top frontier models: Claude 3.7/3.5 -> GPT-4o -> DeepSeek V3 -> Gemini 2.0 Flash -> Cloudflare',
     tag: 'smart',
     providers: [
       { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022' },
@@ -234,15 +233,18 @@ export const DEFAULT_FALLBACK_GROUPS: ModelFallbackGroup[] = [
       { provider: 'deepseek', model: 'deepseek-chat' },
       { provider: 'gemini', model: 'gemini-2.0-flash' },
       { provider: 'openrouter', model: 'anthropic/claude-3.5-sonnet' },
+      { provider: 'cloudflare', model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast' },
+      { provider: 'groq', model: 'llama-3.3-70b-versatile' },
     ],
   },
   {
     id: 'auto-fast',
     name: 'Auto Fast (Low Latency & High Rate-Limits)',
-    description: 'Ultra-fast execution: Groq LLaMA 3.3 70B -> Gemini 2.0 Flash -> DeepSeek Chat -> GPT-4o-mini',
+    description: 'Ultra-fast execution: Groq LLaMA 3.3 70B -> Cloudflare -> Gemini 2.0 Flash -> DeepSeek Chat -> GPT-4o-mini',
     tag: 'fast',
     providers: [
       { provider: 'groq', model: 'llama-3.3-70b-versatile' },
+      { provider: 'cloudflare', model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast' },
       { provider: 'gemini', model: 'gemini-2.0-flash' },
       { provider: 'deepseek', model: 'deepseek-chat' },
       { provider: 'openai', model: 'gpt-4o-mini' },
@@ -251,25 +253,28 @@ export const DEFAULT_FALLBACK_GROUPS: ModelFallbackGroup[] = [
   {
     id: 'auto-reason',
     name: 'Auto Reasoning (Complex Logic & Math)',
-    description: 'Deep reasoning models: DeepSeek R1 -> Gemini 2.0 Flash Thinking -> OpenAI o3-mini',
+    description: 'Deep reasoning models: DeepSeek R1 -> Gemini 2.0 Flash Thinking -> OpenAI o3-mini -> Cloudflare R1',
     tag: 'reason',
     providers: [
       { provider: 'deepseek', model: 'deepseek-reasoner' },
       { provider: 'gemini', model: 'gemini-2.0-flash-thinking-exp-01-21' },
       { provider: 'openai', model: 'o3-mini' },
       { provider: 'groq', model: 'deepseek-r1-distill-llama-70b' },
+      { provider: 'cloudflare', model: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b' },
     ],
   },
   {
     id: 'auto-code',
     name: 'Auto Code (Specialized Coding Engine)',
-    description: 'Optimized for diffs & programming: Claude 3.5 Sonnet -> Mistral Codestral -> Qwen 2.5 Coder -> DeepSeek V3',
+    description: 'Optimized for diffs & programming: Claude 3.5 Sonnet -> Mistral Codestral -> Qwen 2.5 Coder -> DeepSeek V3 -> Cloudflare Qwen',
     tag: 'code',
     providers: [
       { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022' },
       { provider: 'mistral', model: 'codestral-latest' },
       { provider: 'together', model: 'Qwen/Qwen2.5-Coder-32B-Instruct' },
       { provider: 'deepseek', model: 'deepseek-chat' },
+      { provider: 'cloudflare', model: '@cf/qwen/qwen2.5-coder-32b-instruct' },
+      { provider: 'groq', model: 'qwen-2.5-coder-32b' },
     ],
   },
 ];

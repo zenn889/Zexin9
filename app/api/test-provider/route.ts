@@ -20,7 +20,7 @@ const TEST_MODELS: Record<ProviderId, string> = {
   openrouter: 'openai/gpt-4o-mini',
   mistral: 'mistral-small-latest',
   together: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
-  cloudflare: '@cf/meta/llama-3.1-8b-instruct',
+  cloudflare: '@cf/meta/llama-3.1-8b-instruct-fp8',
   cerebras: 'llama3.1-8b',
   siliconflow: 'Qwen/Qwen2.5-Coder-7B-Instruct',
   perplexity: 'sonar',
