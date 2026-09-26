@@ -297,6 +297,18 @@ Pesan error detail koneksinya sekarang tampil di kartu **ACTIVE ENGINE** (tab Da
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key Supabase | Opsional |
 | `SUPABASE_TABLE` | Nama tabel state Supabase (default `zexin9_state`) | Opsional |
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Upstash Redis / Vercel KV (alternatif MongoDB) | Opsional |
+| `ROUTER_REQUEST_TIMEOUT_MS` | Batas waktu satu permintaan ke provider (default `280000` = ~4,5 menit). Naikkan kalau jawaban coding sangat panjang | Opsional |
+
+---
+
+## 🧩 Playground: Mode File, Auto-lanjut & .zip (gaya Claude)
+
+Playground sekarang **membangun file sendiri** lalu mengirimnya sebagai **.zip**, dan tidak lagi "putus-putus" saat coding berat:
+
+- **Mode File** (default AKTIF, bisa dimatikan di deretan sakelar bawah): instruksi sistem kecil menambahkan aturan bahwa setiap file harus ditulis sebagai blok kode **terpisah dengan nama file di baris pembuka** (` ```js src/app.js `). Hasilnya: tiap file muncul sebagai kartu (Preview HTML/SVG, Download, Salin) **plus satu lampiran `project.zip` di dalam jawaban** yang bisa langsung diunduh.
+- **Auto-lanjut** (default AKTIF): kalau jawaban terpotong — kena batas token (`finish_reason: length`) atau koneksi streaming putus di tengah — permintaan lanjutan "Lanjutkan PERSIS dari titik terakhir" dikirim otomatis sampai **3×**, lalu potongan-potongannya disambung jadi satu jawaban utuh. Kalau masih terpotong, muncul tombol **Lanjutkan jawaban** di bawah pesan.
+- **Panjang** (Auto / 8k / 16k / 32k): Auto = serahkan ke provider (paling aman); pilih 16k/32k kalau butuh jawaban panjang. Kalau provider menolak `max_tokens` yang terlalu besar (DeepSeek dkk), gateway **otomatis mengulang** dengan batas aman 8192 — jadi tidak pernah gagal hanya karena angka itu.
+- Batas waktu server untuk proksi `/v1` dinaikkan ke **300 detik** (dari 120) supaya generasi panjang tidak dipotong platform.
 
 ---
 

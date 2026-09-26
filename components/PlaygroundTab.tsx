@@ -16,29 +16,37 @@ import {
   FileCode,
   FileText,
   Flame,
+  FolderTree,
   Gauge,
   Image as ImageIcon,
+  Maximize2,
   MessageSquare,
   Paperclip,
+  PlayCircle,
   Plus,
+  RefreshCw,
   Search,
   Send,
   Sidebar as SidebarIcon,
   Sparkles,
   Trash2,
   User,
+  Wand2,
   X,
   Zap,
 } from 'lucide-react';
 import { DEFAULT_FALLBACK_GROUPS, DEFAULT_PROVIDERS } from '@/lib/config';
 import { buildZip } from '@/lib/zip';
+import { streamChatOnce, streamWithAutoContinue } from '@/lib/chat-stream';
 import {
   ArtifactFile,
   ChatFilesPanel,
   CodeFileCard,
   FilePreviewModal,
+  ZipAttachmentCard,
   extensionFor,
   isPreviewable,
+  zipNameForFiles,
 } from './FileCards';
 
 interface PlaygroundTabProps {
@@ -68,6 +76,10 @@ export interface Message {
     tokensSaved?: number;
     durationMs?: number;
     tokensPerSec?: number;
+    /** How many times the answer had to be auto-continued (cut mid-way). */
+    continued?: number;
+    /** True when the answer still looks cut off (offer a manual continue). */
+    wasTruncated?: boolean;
   };
 }
 
@@ -80,10 +92,19 @@ export interface ChatSession {
   messages: Message[];
 }
 
+// Injected while "Mode File" is on: makes the model declare each file on its
+// fence line (```lang path/to/file.ext) so the Playground can turn the answer
+// into real, downloadable files — Claude-artifact style.
+const FILE_MODE_INSTRUCTION =
+  'Mode Proyek aktif. Saat kamu membuat kode/berkas: tulis SETIAP file sebagai satu blok kode TERPISAH, dan tulis nama file (sertakan path relatif bila ada struktur, mis. src/app.js) tepat setelah bahasa pada baris pembuka blok — contoh baris pembuka: ```html index.html atau ```js src/app.js . Jangan menggabungkan beberapa file dalam satu blok, jangan menaruh isi file di dalam kalimat penjelasan, dan selalu tutup setiap blok dengan rapi. Setelah semua file selesai, akhiri jawaban dengan satu baris daftar: "📦 File: <nama-nama file>". Untuk tugas besar, kerjakan file demi file secara lengkap (jangan dipotong) — kalau perlu, tulis satu file per jawaban.';
+
+const CONTINUE_INSTRUCTION =
+  'Jawaban sebelumnya terpotong di tengah. Lanjutkan PERSIS dari titik terakhir: tulis HANYA lanjutannya saja, tanpa mengulang bagian sebelumnya, tanpa kalimat pembuka baru, dan pastikan blok kode ditutup dengan rapi.';
+
 const DEFAULT_WELCOME_MESSAGE: Message = {
   role: 'assistant',
   content:
-    '👋 **Zexin9 Gateway Online!**\n\nPilih model apa pun (misal `auto-smart` atau `deepseek-chat`), lampirkan file kode/dokumen jika diperlukan, dan kirim instruksi Anda. Kalau jawabannya berisi file (kode, HTML, JSON, ...), hasilnya muncul sebagai kartu file — bisa **Download**, **Preview** (HTML/SVG), atau disimpan sekaligus sebagai **.zip**. Semua riwayat sesi Anda tersimpan permanen dan tidak akan hilang!',
+    '👋 **Zexin9 Gateway Online!**\n\nPilih model apa pun (misal `auto-smart` atau `deepseek-chat`), lampirkan file kode/dokumen jika diperlukan, dan kirim instruksi Anda.\n\n• **Mode File** (aktif) — model menulis setiap file sebagai blok kode bernama, hasilnya jadi kartu file yang bisa di-**Preview** (HTML/SVG), di-**Download** satu-satu, atau diunduh sekaligus sebagai **.zip** langsung dari jawabannya (gaya Claude).\n• **Auto-lanjut** (aktif) — jawaban coding panjang yang terpotong akan dilanjutkan otomatis sampai utuh, tidak lagi putus-putus.\n• **Panjang** — pilih Auto/8k/16k/32k kalau butuh jawaban lebih panjang.\n\nSemua riwayat sesi tersimpan permanen dan tidak akan hilang!',
 };
 
 // Helper: Trigger a browser download for a Blob
@@ -99,11 +120,31 @@ function downloadBlob(filename: string, blob: Blob) {
 }
 
 // Helper: Download every generated file of a chat as one .zip
-function downloadFilesAsZip(files: ArtifactFile[]) {
+function downloadFilesAsZip(files: ArtifactFile[], archiveName?: string) {
   if (!files.length) return;
   const zip = buildZip(files.map((f) => ({ name: f.name, content: f.content })));
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-  downloadBlob(`zexin9-files-${stamp}.zip`, new Blob([zip as unknown as BlobPart], { type: 'application/zip' }));
+  const name = (archiveName || '').trim() || `zexin9-files-${stamp}.zip`;
+  downloadBlob(name, new Blob([zip as unknown as BlobPart], { type: 'application/zip' }));
+}
+
+// Files produced by ONE assistant answer, named like the code-block cards are.
+function filesFromParts(parts: Array<{ type: string; content: string; language?: string; filename?: string }>): ArtifactFile[] {
+  const out: ArtifactFile[] = [];
+  const nameCount = new Map<string, number>();
+  parts.forEach((part) => {
+    if (part.type !== 'code' || !part.content || !part.content.trim()) return;
+    const language = (part.language || 'code').toLowerCase();
+    let name = (part.filename || '').trim() || `zexin9-file.${extensionFor(language)}`;
+    const seen = (nameCount.get(name) || 0) + 1;
+    nameCount.set(name, seen);
+    if (seen > 1) {
+      const dot = name.lastIndexOf('.');
+      name = dot > 0 ? `${name.slice(0, dot)}-${seen}${name.slice(dot)}` : `${name}-${seen}`;
+    }
+    out.push({ name, language: part.language || 'code', content: part.content });
+  });
+  return out;
 }
 
 // Helper: Download code as a standalone file
@@ -229,6 +270,36 @@ export function PlaygroundTab({
   const [copiedMsgIdx, setCopiedMsgIdx] = useState<number | null>(null);
   const [previewFile, setPreviewFile] = useState<ArtifactFile | null>(null);
   const [showChatFiles, setShowChatFiles] = useState(false);
+
+  // --- Answer controls: file mode (declare filenames), auto-continue on cut
+  // answers, and how long an answer may get. Persisted per browser.
+  const [fileMode, setFileMode] = useState(true);
+  const [autoContinue, setAutoContinue] = useState(true);
+  const [maxTokens, setMaxTokens] = useState<'auto' | '8000' | '16000' | '32000'>('auto');
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem('zexin9_playground_answer_opts');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (typeof parsed?.fileMode === 'boolean') setFileMode(parsed.fileMode);
+      if (typeof parsed?.autoContinue === 'boolean') setAutoContinue(parsed.autoContinue);
+      if (['auto', '8000', '16000', '32000'].includes(parsed?.maxTokens)) setMaxTokens(parsed.maxTokens);
+    } catch {
+      // ignore
+    }
+  }, []);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(
+        'zexin9_playground_answer_opts',
+        JSON.stringify({ fileMode, autoContinue, maxTokens })
+      );
+    } catch {
+      // ignore
+    }
+  }, [fileMode, autoContinue, maxTokens]);
 
   // --- File Upload State ---
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
@@ -483,6 +554,73 @@ export function PlaygroundTab({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [previewFile]);
+
+  // --- Every header /v1 needs: gateway key, per-provider keys & base URLs,
+  // Cloudflare account id and the feature flags.
+  const buildStreamHeaders = useCallback((): Record<string, string> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (gatewaySecret) headers['Authorization'] = `Bearer ${gatewaySecret}`;
+    if (enableCompression) headers['x-router-optimize'] = 'true';
+    if (cavemanMode) headers['x-caveman-mode'] = 'true';
+
+    Object.entries(keys).forEach(([pId, keyVal]) => {
+      if (keyVal && keyVal.trim()) headers[`x-${pId}-key`] = keyVal.trim();
+    });
+    Object.entries(baseUrls).forEach(([pId, urlVal]) => {
+      if (urlVal && urlVal.trim()) headers[`x-${pId}-base-url`] = urlVal.trim();
+    });
+
+    // Re-read baseUrls and keys from localStorage to catch updates from the
+    // Providers tab that have not propagated to props yet.
+    if (typeof window !== 'undefined') {
+      try {
+        const lsBaseUrls = JSON.parse(
+          localStorage.getItem('zexin9_baseurls') || localStorage.getItem('9router_baseurls') || '{}'
+        );
+        Object.entries(lsBaseUrls).forEach(([pId, urlVal]) => {
+          if (typeof urlVal === 'string' && urlVal.trim() && !headers[`x-${pId}-base-url`]) {
+            headers[`x-${pId}-base-url`] = urlVal.trim();
+          }
+        });
+        const lsKeys = JSON.parse(
+          localStorage.getItem('zexin9_keys') || localStorage.getItem('9router_keys') || '{}'
+        );
+        Object.entries(lsKeys).forEach(([pId, keyVal]) => {
+          if (typeof keyVal === 'string' && keyVal.trim() && !headers[`x-${pId}-key`]) {
+            headers[`x-${pId}-key`] = keyVal.trim();
+          }
+        });
+        const cfAccountId =
+          localStorage.getItem('zexin9_cf_account_id') ||
+          localStorage.getItem('9router_cf_account_id') ||
+          '';
+        if (cfAccountId.trim()) headers['x-cloudflare-account-id'] = cfAccountId.trim();
+      } catch {
+        // ignore JSON parse errors
+      }
+    }
+    return headers;
+  }, [gatewaySecret, enableCompression, cavemanMode, keys, baseUrls]);
+
+  // --- One streaming round-trip. The real logic lives in lib/chat-stream.ts so
+  // the "cut answer -> continue" behaviour is unit-testable instead of inline.
+  const runChatStream = useCallback(
+    (
+      apiMessages: Array<{ role: string; content: string }>,
+      streamHeaders: Record<string, string>,
+      model: string,
+      onDelta?: (partialText: string) => void
+    ) =>
+      streamChatOnce({
+        url: '/v1/chat/completions',
+        headers: streamHeaders,
+        model,
+        messages: apiMessages,
+        maxTokens,
+        onDelta,
+      }),
+    [maxTokens]
+  );
 
   useEffect(() => {
     scrollToBottom();
@@ -748,65 +886,7 @@ export function PlaygroundTab({
     const startTime = Date.now();
 
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-
-      if (gatewaySecret) {
-        headers['Authorization'] = `Bearer ${gatewaySecret}`;
-      }
-      if (enableCompression) {
-        headers['x-router-optimize'] = 'true';
-      }
-      if (cavemanMode) {
-        headers['x-caveman-mode'] = 'true';
-      }
-
-      Object.entries(keys).forEach(([pId, keyVal]) => {
-        if (keyVal && keyVal.trim()) headers[`x-${pId}-key`] = keyVal.trim();
-      });
-      Object.entries(baseUrls).forEach(([pId, urlVal]) => {
-        if (urlVal && urlVal.trim()) headers[`x-${pId}-base-url`] = urlVal.trim();
-      });
-
-      // Re-read baseUrls and keys from localStorage to catch any updates from ProvidersTab
-      // that haven't propagated to props yet (different localStorage keys used by ProvidersTab)
-      if (typeof window !== 'undefined') {
-        try {
-          const lsBaseUrls = JSON.parse(
-            localStorage.getItem('zexin9_baseurls') ||
-            localStorage.getItem('9router_baseurls') || '{}'
-          );
-          Object.entries(lsBaseUrls).forEach(([pId, urlVal]) => {
-            if (typeof urlVal === 'string' && urlVal.trim() && !headers[`x-${pId}-base-url`]) {
-              headers[`x-${pId}-base-url`] = urlVal.trim();
-            }
-          });
-
-          const lsKeys = JSON.parse(
-            localStorage.getItem('zexin9_keys') ||
-            localStorage.getItem('9router_keys') || '{}'
-          );
-          Object.entries(lsKeys).forEach(([pId, keyVal]) => {
-            if (typeof keyVal === 'string' && keyVal.trim() && !headers[`x-${pId}-key`]) {
-              headers[`x-${pId}-key`] = keyVal.trim();
-            }
-          });
-        } catch {
-          // ignore JSON parse errors
-        }
-      }
-
-      // Always send Cloudflare Account ID so router can build the correct base URL
-      if (typeof window !== 'undefined') {
-        const cfAccountId =
-          localStorage.getItem('zexin9_cf_account_id') ||
-          localStorage.getItem('9router_cf_account_id') ||
-          '';
-        if (cfAccountId.trim()) {
-          headers['x-cloudflare-account-id'] = cfAccountId.trim();
-        }
-      }
+      const headers = buildStreamHeaders();
 
       // Prepare API messages
       const apiMessages = newMessages
@@ -827,135 +907,31 @@ export function PlaygroundTab({
         apiMessages.push({ role: 'user', content: fullPromptPayload });
       }
 
-      const res = await fetch('/v1/chat/completions', {
-        method: 'POST',
+      // Mode File: minta model menulis SETIAP file sebagai blok terpisah dengan
+      // nama file di baris pembuka — supaya hasilnya bisa dirakit jadi file + .zip
+      // (gaya Claude artifacts).
+      const requestMessages = fileMode
+        ? [{ role: 'system', content: FILE_MODE_INSTRUCTION }, ...apiMessages]
+        : apiMessages;
+
+      const multi = await streamWithAutoContinue({
+        url: '/v1/chat/completions',
         headers,
-        credentials: 'include',
-        body: JSON.stringify({
-          model: currentModel,
-          messages: apiMessages,
-          stream: true,
-          max_tokens: 8192,
-        }),
+        model: currentModel,
+        messages: requestMessages,
+        maxTokens,
+        maxRounds: autoContinue ? 3 : 0,
+        onDelta: (partial) => setCurrentResponse(partial),
+        onRoundStart: (round, maxRounds, textSoFar) =>
+          setCurrentResponse(
+            textSoFar + `\n\n⏳ *Jawaban terpotong — melanjutkan otomatis (${round}/${maxRounds})…*`
+          ),
       });
+      const first = multi.first;
 
-      const servedBy = res.headers.get('x-router-provider') || 'unknown';
-      const servedModel = res.headers.get('x-router-model') || currentModel;
-      const fallbackCount = parseInt(res.headers.get('x-router-fallback-count') || '0', 10);
-      const failures = res.headers.get('x-router-failures') || '';
-      const tokensSaved = parseInt(res.headers.get('x-router-tokens-saved') || '0', 10);
-
-      if (!res.ok) {
-        const errorJson = await res.json().catch(() => null);
-        let errMsg =
-          errorJson?.error?.message ||
-          errorJson?.error ||
-          `HTTP ${res.status}: Fallback exhausted or invalid keys.`;
-
-        if (Array.isArray(errorJson?.error?.failure_chain) && errorJson.error.failure_chain.length > 0) {
-          errMsg +=
-            '\n\n**Riwayat Provider Pool:**\n' +
-            errorJson.error.failure_chain.map((c: string) => `• ${c}`).join('\n');
-        }
-
-        const errorAssistantMsg: Message = {
-          role: 'assistant',
-          content: `⚠️ **Router Alert:**\n\n${errMsg}`,
-          meta: { durationMs: Date.now() - startTime },
-        };
-
-        const updatedWithErr = sessions.map((s) =>
-          s.id === activeSession.id
-            ? {
-                ...s,
-                messages: [...newMessages, errorAssistantMsg],
-                updatedAt: new Date().toISOString(),
-              }
-            : s
-        );
-        setSessions(updatedWithErr);
-        persistSessions(updatedWithErr, activeSession.id);
-        setIsLoading(false);
-        return;
-      }
-
-      const contentType = res.headers.get('content-type') || '';
-      let accumulatedText = '';
-
-      if (contentType.includes('application/json')) {
-        const json = await res.json().catch(() => null);
-        accumulatedText = json?.choices?.[0]?.message?.content || json?.choices?.[0]?.text || '';
-        setCurrentResponse(accumulatedText);
-      } else {
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder();
-
-        if (reader) {
-          let buffer = '';
-          while (true) {
-            const { done, value } = await reader.read();
-
-            // Flush remaining bytes from TextDecoder on stream end
-            if (done) {
-              const remaining = decoder.decode(undefined, { stream: false });
-              if (remaining) buffer += remaining;
-            } else {
-              buffer += decoder.decode(value, { stream: true });
-            }
-
-            // Process all complete lines in buffer
-            const lines = buffer.split('\n');
-            // Keep last incomplete line in buffer (unless done, then process everything)
-            buffer = done ? '' : (lines.pop() || '');
-
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed.startsWith('data:')) continue;
-              const dataStr = trimmed.slice(5).trim();
-              if (!dataStr || dataStr === '[DONE]') continue;
-
-              try {
-                const chunk = JSON.parse(dataStr);
-                const delta =
-                  chunk.choices?.[0]?.delta?.content ||
-                  chunk.choices?.[0]?.delta?.reasoning_content ||
-                  chunk.choices?.[0]?.text;
-                if (delta) {
-                  accumulatedText += delta;
-                  setCurrentResponse(accumulatedText);
-                }
-              } catch {
-                // Ignore parse errors on individual SSE lines
-              }
-            }
-
-            if (done) break;
-          }
-
-          // Process any leftover buffer content after stream ends
-          if (buffer.trim()) {
-            const trimmed = buffer.trim();
-            if (trimmed.startsWith('data:')) {
-              const dataStr = trimmed.slice(5).trim();
-              if (dataStr && dataStr !== '[DONE]') {
-                try {
-                  const chunk = JSON.parse(dataStr);
-                  const delta =
-                    chunk.choices?.[0]?.delta?.content ||
-                    chunk.choices?.[0]?.delta?.reasoning_content ||
-                    chunk.choices?.[0]?.text;
-                  if (delta) {
-                    accumulatedText += delta;
-                    setCurrentResponse(accumulatedText);
-                  }
-                } catch {
-                  // ignore
-                }
-              }
-            }
-          }
-        }
-      }
+      let accumulatedText = multi.text;
+      const autoContinued = multi.rounds;
+      const stillTruncated = multi.stillTruncated;
 
       const totalDuration = Date.now() - startTime;
       const estTokens = Math.round(accumulatedText.length / 4);
@@ -965,13 +941,15 @@ export function PlaygroundTab({
         role: 'assistant',
         content: accumulatedText || '(Empty response)',
         meta: {
-          servedBy,
-          servedModel,
-          fallbackCount,
-          failures,
-          tokensSaved,
+          servedBy: first.servedBy,
+          servedModel: first.servedModel,
+          fallbackCount: first.fallbackCount,
+          failures: first.failures,
+          tokensSaved: first.tokensSaved,
           durationMs: totalDuration,
           tokensPerSec,
+          ...(autoContinued > 0 ? { continued: autoContinued } : {}),
+          ...(stillTruncated && accumulatedText.trim() ? { wasTruncated: true } : {}),
         },
       };
 
@@ -1006,6 +984,65 @@ export function PlaygroundTab({
       persistSessions(finalSessions, activeSession.id);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Tombol "Lanjutkan" untuk jawaban yang MASIH terpotong setelah auto-lanjut.
+  const handleContinueMessage = async (msgIndex: number) => {
+    const session = activeSession;
+    if (!session || isLoading) return;
+
+    const targetMeta = session.messages[msgIndex]?.meta;
+    const continueModel = targetMeta?.servedModel || selectedModelRef.current || selectedModel;
+    const baseMessages = session.messages
+      .slice(0, msgIndex + 1)
+      .filter((m) => m.role !== 'system')
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    setIsLoading(true);
+    setCurrentResponse('');
+    try {
+      const next = await runChatStream(
+        [
+          ...(fileMode ? [{ role: 'system', content: FILE_MODE_INSTRUCTION }] : []),
+          ...baseMessages,
+          { role: 'user', content: CONTINUE_INSTRUCTION },
+        ],
+        buildStreamHeaders(),
+        continueModel,
+        (partial) => setCurrentResponse(partial)
+      );
+
+      if (next.ok && next.text.trim()) {
+        const finalSessions = sessions.map((s) =>
+          s.id === session.id
+            ? {
+                ...s,
+                messages: s.messages.map((m, i) =>
+                  i === msgIndex
+                    ? {
+                        ...m,
+                        content: m.content + next.text,
+                        meta: {
+                          ...m.meta,
+                          continued: (m.meta?.continued || 0) + 1,
+                          wasTruncated: next.finishReason === 'length' || !next.completed,
+                        },
+                      }
+                    : m
+                ),
+                updatedAt: new Date().toISOString(),
+              }
+            : s
+        );
+        setSessions(finalSessions);
+        persistSessions(finalSessions, session.id);
+      }
+    } catch {
+      // network error — leave the message untouched
+    } finally {
+      setIsLoading(false);
+      setCurrentResponse('');
     }
   };
 
@@ -1260,6 +1297,60 @@ export function PlaygroundTab({
               </span>
             </label>
 
+            <label
+              className="flex items-center space-x-1.5 cursor-pointer text-xs font-semibold text-slate-300 hover:text-white transition"
+              title="Model menulis setiap file sebagai blok kode bernama → otomatis jadi kartu file + dikirim sebagai .zip (gaya Claude)"
+            >
+              <input
+                type="checkbox"
+                checked={fileMode}
+                onChange={(e) => setFileMode(e.target.checked)}
+                className="rounded bg-slate-950 border-slate-700 text-cyan-500 focus:ring-0 w-3.5 h-3.5 sm:w-4 sm:h-4 cursor-pointer"
+              />
+              <span className="flex items-center space-x-1">
+                <FolderTree className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden sm:inline">Mode File</span>
+              </span>
+            </label>
+
+            <label
+              className="flex items-center space-x-1.5 cursor-pointer text-xs font-semibold text-slate-300 hover:text-white transition"
+              title="Jawaban panjang (coding berat) yang terpotong akan dilanjutkan otomatis sampai utuh"
+            >
+              <input
+                type="checkbox"
+                checked={autoContinue}
+                onChange={(e) => setAutoContinue(e.target.checked)}
+                className="rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-0 w-3.5 h-3.5 sm:w-4 sm:h-4 cursor-pointer"
+              />
+              <span className="flex items-center space-x-1">
+                <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Auto-lanjut</span>
+              </span>
+            </label>
+
+            <label
+              className="flex items-center space-x-1.5 text-xs font-semibold text-slate-300 hover:text-white transition"
+              title="Batas panjang jawaban model. Auto = serahkan ke provider (paling aman untuk coding berat)."
+            >
+              <span className="flex items-center space-x-1">
+                <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
+                <span className="hidden sm:inline">Panjang:</span>
+              </span>
+              <select
+                value={maxTokens}
+                onChange={(e) =>
+                  setMaxTokens(e.target.value as 'auto' | '8000' | '16000' | '32000')
+                }
+                className="bg-slate-950 border border-slate-700 rounded-lg px-1.5 py-0.5 text-[11px] font-mono text-cyan-200 focus:outline-none cursor-pointer"
+              >
+                <option value="auto">Auto</option>
+                <option value="8000">8k</option>
+                <option value="16000">16k</option>
+                <option value="32000">32k</option>
+              </select>
+            </label>
+
             <button
               onClick={handleClearCurrentChat}
               className="p-1.5 sm:p-2 text-slate-400 hover:text-rose-400 rounded-xl hover:bg-slate-800 transition"
@@ -1404,6 +1495,21 @@ export function PlaygroundTab({
                             />
                           );
                         })}
+
+                        {/* Attachment gaya Claude: jawaban ini menghasilkan file,
+                            jadi model "mengirim" mereka sebagai satu .zip. */}
+                        {(() => {
+                          const msgFiles = filesFromParts(parts);
+                          if (msgFiles.length === 0) return null;
+                          return (
+                            <ZipAttachmentCard
+                              files={msgFiles}
+                              onDownload={(files) =>
+                                downloadFilesAsZip(files, zipNameForFiles(files))
+                              }
+                            />
+                          );
+                        })()}
                       </div>
                     )}
 
@@ -1471,6 +1577,24 @@ export function PlaygroundTab({
                           <Coins className="w-3 h-3 text-emerald-400" />
                           <span>~{msg.meta.tokensSaved} tokens saved</span>
                         </span>
+                      )}
+                      {Boolean(msg.meta.continued) && (
+                        <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-300 border border-violet-500/20 font-medium">
+                          <Wand2 className="w-3 h-3 text-violet-300" />
+                          <span>dilanjutkan otomatis ×{msg.meta.continued}</span>
+                        </span>
+                      )}
+                      {msg.meta.wasTruncated && !isUser && (
+                        <button
+                          type="button"
+                          onClick={() => handleContinueMessage(index)}
+                          disabled={isLoading}
+                          className="flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-200 border border-amber-500/30 font-bold hover:bg-amber-500/25 transition active:scale-95 disabled:opacity-50"
+                          title="Jawaban masih terpotong — lanjutkan dari titik terakhir"
+                        >
+                          <PlayCircle className="w-3 h-3" />
+                          <span>Lanjutkan jawaban</span>
+                        </button>
                       )}
                     </div>
                   )}

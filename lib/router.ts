@@ -682,10 +682,15 @@ export async function routeChatCompletion(
     }
 
     try {
-      // Execute provider call with a 110s timeout for serverless (streaming can be long).
-      // The signal is passed down to fetch(), so hung upstreams are actually aborted.
+      // Execute provider call with a generous timeout. Streaming answers for
+      // heavy coding tasks can run for minutes — the old 110s cap cut them off
+      // mid-stream. Tunable via ROUTER_REQUEST_TIMEOUT_MS (default ~4m40s).
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 110000);
+      const requestTimeoutMs = Number(process.env.ROUTER_REQUEST_TIMEOUT_MS || 280000);
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        Number.isFinite(requestTimeoutMs) && requestTimeoutMs > 0 ? requestTimeoutMs : 280000
+      );
 
       let poolResult;
       try {

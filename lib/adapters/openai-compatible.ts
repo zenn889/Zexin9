@@ -69,15 +69,36 @@ export async function callOpenAICompatible(
 
   // Always ensure max_tokens is set — providers like Cloudflare Workers AI default
   // to only 256 tokens which causes responses to be cut off mid-sentence.
-  const body: ChatCompletionRequest = {
+  const effectiveMax = request.max_tokens ?? 8192;
+  const makeBody = (maxTokens: number): ChatCompletionRequest => ({
     ...request,
-    max_tokens: request.max_tokens ?? 8192,
-  };
+    max_tokens: maxTokens,
+  });
 
-  return await fetch(url, {
+  let res = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify(makeBody(effectiveMax)),
     signal,
   });
+
+  // Some providers (DeepSeek, OpenAI, …) reject a max_tokens larger than the
+  // model's own limit with HTTP 400. Retry once with the safe 8192 cap instead
+  // of failing the whole request — heavy-coding answers must not die like that.
+  if (!res.ok && effectiveMax > 8192 && res.status === 400) {
+    const errText = await res
+      .clone()
+      .text()
+      .catch(() => '');
+    if (/max_tokens|max output|maximum|too large|exceed|limit/i.test(errText)) {
+      res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(makeBody(8192)),
+        signal,
+      });
+    }
+  }
+
+  return res;
 }

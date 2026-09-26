@@ -298,3 +298,65 @@ export function FilePreviewModal({
     </div>
   );
 }
+
+/** Optional zip name for a set of files: <folder>.zip / <file>.zip / project.zip */
+export function zipNameForFiles(files: ArtifactFile[]): string {
+  const first = (files[0]?.name || '').trim();
+  if (files.length > 1) {
+    const seg = first.includes('/') ? first.split('/')[0].trim() : '';
+    if (seg && seg !== '.' && seg !== '..' && !seg.includes('\\')) return `${seg}.zip`;
+    return 'project.zip';
+  }
+  const base = first.replace(/\.[^.]+$/, '') || 'file';
+  return `${base}.zip`;
+}
+
+/**
+ * Claude-style attachment row: the answer produced files, so the model "sends"
+ * them as a single downloadable .zip.
+ */
+export function ZipAttachmentCard({
+  files,
+  onDownload,
+}: {
+  files: ArtifactFile[];
+  onDownload: (files: ArtifactFile[]) => void;
+}) {
+  if (files.length === 0) return null;
+  const zipName = zipNameForFiles(files);
+  const totalBytes = files.reduce(
+    (sum, f) => sum + new TextEncoder().encode(f.content || '').length,
+    0
+  );
+  const totalLabel =
+    totalBytes < 1024
+      ? `${totalBytes} B`
+      : totalBytes < 1024 * 1024
+        ? `${(totalBytes / 1024).toFixed(1)} KB`
+        : `${(totalBytes / (1024 * 1024)).toFixed(1)} MB`;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.04] px-3 py-2">
+      <div className="flex items-center space-x-2 min-w-0">
+        <span className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center shrink-0">
+          <FileArchive className="w-4 h-4 text-emerald-300" />
+        </span>
+        <div className="min-w-0">
+          <div className="text-xs font-mono font-bold text-emerald-200 truncate">{zipName}</div>
+          <div className="text-[10px] font-mono text-slate-400">
+            {files.length} file · {totalLabel}
+          </div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => onDownload(files)}
+        className="ml-auto flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-200 text-[11px] font-semibold transition active:scale-95"
+        title={`Download ${zipName}`}
+      >
+        <Download className="w-3.5 h-3.5" />
+        <span>Download .zip</span>
+      </button>
+    </div>
+  );
+}
