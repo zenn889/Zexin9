@@ -588,6 +588,10 @@ export function getEffectiveProviderAccounts(
               accountId: acc.accountId ? String(acc.accountId).trim() : undefined,
               baseUrl: acc.baseUrl ? String(acc.baseUrl).trim() : undefined,
               enabled: acc.enabled !== false,
+              // Keep model discovery metadata — the router uses it to pick a real
+              // model when the request targets a virtual group (e.g. auto-smart).
+              ...(Array.isArray(acc.detectedModels) ? { detectedModels: acc.detectedModels.map(String) } : {}),
+              ...(Array.isArray(acc.verifiedModels) ? { verifiedModels: acc.verifiedModels.map(String) } : {}),
             });
           }
         });
@@ -614,6 +618,10 @@ export function getEffectiveProviderAccounts(
           priority: acc.priority,
           createdAt: acc.createdAt,
           lastUsedAt: acc.lastUsedAt,
+          // Keep model discovery metadata (see above): without these, a virtual
+          // group request can only try the group id itself and gets a 404.
+          ...(Array.isArray(acc.detectedModels) ? { detectedModels: acc.detectedModels.map(String) } : {}),
+          ...(Array.isArray(acc.verifiedModels) ? { verifiedModels: acc.verifiedModels.map(String) } : {}),
         });
       }
     });

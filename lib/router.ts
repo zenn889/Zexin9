@@ -220,12 +220,21 @@ export function resolveCandidates(
   requestedModel: string,
   headerKeys: Record<string, string> = {}
 ): RouteCandidate[] {
-  // 1. Check if it's one of the predefined virtual fallback groups
+  // 1. If it's a virtual fallback group (auto-smart, etc.), expand it but STILL
+  //    include the user's configured providers — above all the custom endpoint.
+  //    (Previously this returned the static chain only, so a Playground set to a
+  //    virtual group never reached the user's own endpoint and finished with
+  //    "Semua provider ... Dilewati (Belum ada akun/key)" even with accounts.)
   const group = DEFAULT_FALLBACK_GROUPS.find(
     (g) => g.id.toLowerCase() === requestedModel.toLowerCase()
   );
   if (group) {
-    return [...group.providers];
+    return appendUserConfiguredCandidates(
+      [...group.providers],
+      requestedModel,
+      headerKeys,
+      getCustomPreferredModels(headerKeys)
+    );
   }
 
   const modelLower = requestedModel.toLowerCase();
@@ -298,18 +307,65 @@ export function resolveCandidates(
     candidates.push({ provider: 'groq', model: 'llama-3.3-70b-versatile' });
   }
 
-  // 3. Multi-Provider Pool Inclusion: Append ANY provider configured by the user that has accounts or a key
-  for (const prov of DEFAULT_PROVIDERS) {
-    if (!candidates.some((c) => c.provider === prov.id)) {
-      // Custom provider: active when a real endpoint is configured — via the
-      // x-custom-base-url header, the saved settings, or a connected account
-      // (the "Provider Accounts" form stores the endpoint on the account itself).
-      if (prov.id === 'custom') {
-        if (isCustomProviderConfigured(headerKeys)) {
-          candidates.push({ provider: 'custom', model: requestedModel });
-        }
-        continue;
+  // 3./4. Merge in every provider the user actually configured (custom first).
+  return appendUserConfiguredCandidates(candidates, requestedModel, headerKeys);
+}
+
+/**
+ * Models to try on a connected custom endpoint when the request targets a
+ * virtual fallback group (e.g. "Auto Smart") — the group id itself is not a
+ * real model name, so use the models detection verified/discovered instead.
+ */
+function getCustomPreferredModels(headerKeys: Record<string, string> = {}): string[] {
+  const out: string[] = [];
+  const accounts = getEffectiveProviderAccounts('custom', headerKeys).filter(
+    (a) => a.enabled !== false
+  );
+  for (const acc of accounts) {
+    const list = [...(acc.verifiedModels || []), ...(acc.detectedModels || [])];
+    for (const m of list) {
+      const clean = String(m || '').trim();
+      if (clean && !out.includes(clean)) out.push(clean);
+    }
+    if (out.length >= 3) break;
+  }
+  return out.slice(0, 3);
+}
+
+/**
+ * Adds every provider the user actually configured to a candidate chain and
+ * puts the custom endpoint first. Used by BOTH the normal model paths and the
+ * virtual-group path so a user's own endpoint is never skipped.
+ */
+function appendUserConfiguredCandidates(
+  base: RouteCandidate[],
+  requestedModel: string,
+  headerKeys: Record<string, string> = {},
+  customModelsOverride?: string[]
+): RouteCandidate[] {
+  const candidates = [...base];
+
+  // Custom endpoint: active when a real endpoint is configured — via the
+  // x-custom-base-url header, the saved settings, or a connected account
+  // (the "Provider Accounts" form stores the endpoint on the account itself).
+  if (isCustomProviderConfigured(headerKeys)) {
+    const customModels =
+      customModelsOverride && customModelsOverride.length > 0
+        ? customModelsOverride
+        : [requestedModel];
+    for (const m of customModels) {
+      const clean = String(m || '').trim();
+      if (!clean) continue;
+      if (!candidates.some((c) => c.provider === 'custom' && c.model === clean)) {
+        candidates.push({ provider: 'custom', model: clean });
       }
+    }
+  }
+
+  // Any other provider with an account or key also joins the chain.
+  for (const prov of DEFAULT_PROVIDERS) {
+    if (prov.id === 'custom') continue;
+    if (!candidates.some((c) => c.provider === prov.id)) {
       const accounts = getEffectiveProviderAccounts(prov.id, headerKeys);
       const hasKey =
         accounts.some((a) => a.enabled !== false) ||
@@ -320,23 +376,12 @@ export function resolveCandidates(
     }
   }
 
-  // 4. If the custom provider is configured (request header, dashboard config or a
-  //    connected account), put custom FIRST in the chain so it gets tried before
-  //    the generic fallback tiers.
-  if (isCustomProviderConfigured(headerKeys)) {
-    const alreadyFirst = candidates[0]?.provider === 'custom';
-    if (!alreadyFirst) {
-      // Move custom to front if it's in the list, otherwise insert it
-      const customIdx = candidates.findIndex((c) => c.provider === 'custom');
-      if (customIdx > 0) {
-        const [customEntry] = candidates.splice(customIdx, 1);
-        candidates.unshift(customEntry);
-      } else if (customIdx === -1) {
-        candidates.unshift({ provider: 'custom', model: requestedModel });
-      }
-    }
+  // Custom first so the user's own endpoint is tried before generic tiers.
+  if (candidates.some((c) => c.provider === 'custom')) {
+    const customs = candidates.filter((c) => c.provider === 'custom');
+    const rest = candidates.filter((c) => c.provider !== 'custom');
+    return [...customs, ...rest];
   }
-
   return candidates;
 }
 
