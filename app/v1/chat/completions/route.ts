@@ -82,8 +82,7 @@ export async function POST(req: NextRequest) {
 
     const enableCompression =
       req.headers.get('x-router-optimize') === 'true' ||
-      req.headers.get('x-router-compress') === 'true' ||
-      body.stream !== false;
+      req.headers.get('x-router-compress') === 'true';
 
     const cavemanMode =
       req.headers.get('x-caveman-mode') === 'true' ||
@@ -103,7 +102,7 @@ export async function POST(req: NextRequest) {
     db.addLog({
       id: `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       timestamp: new Date().toISOString(),
-      client: clientToken ? clientToken.slice(0, 16) + '...' : 'Open Client',
+      client: db.describeClient(clientToken),
       requestedModel: body.model,
       servedProvider: result.servedBy,
       servedModel: result.servedModel,
@@ -113,7 +112,7 @@ export async function POST(req: NextRequest) {
           ? `Auto-failover tier ${result.fallbackCount} triggered`
           : 'Direct route (Tier 1)',
       promptTokens,
-      completionTokens: 35, // average initial estimate
+      completionTokens: 0,
       tokensSaved: result.tokensSaved,
       latencyMs,
       status: result.response.status,

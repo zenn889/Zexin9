@@ -5,9 +5,7 @@ import {
   DEFAULT_FALLBACK_GROUPS,
   DEFAULT_PROVIDERS,
   getProviderApiKey,
-  getProviderApiKeys,
   getProviderBaseUrl,
-  getEffectiveCloudflareAccounts,
   getEffectiveProviderAccounts,
   getCloudflareAccountId,
 } from './config';
@@ -16,7 +14,6 @@ import {
   ChatCompletionRequest,
   ChatMessage,
   ProviderId,
-  CloudflareAccount,
   ProviderAccount,
 } from './types';
 
@@ -128,28 +125,37 @@ export function normalizeModelForProvider(provider: ProviderId, model: string): 
 }
 
 /**
- * Sanitizes messages so they comply with strict provider API requirements:
- * 1. DeepSeek, Anthropic, Mistral reject requests where the FIRST message is 'assistant'.
- * 2. Filters out empty content messages.
- * 3. Guarantees at least one valid 'user' message exists.
+ * Sanitizes messages so they comply with strict provider API requirements while
+ * preserving non-text payloads (images, tool calls, tool results):
+ * 1. Filters out messages that carry no content and no tool metadata.
+ * 2. Trims text and drops empty text parts, but keeps image/tool parts intact.
+ * 3. Discards leading 'assistant' messages (greetings from the playground/UI).
+ * 4. Guarantees at least one valid 'user'-like message exists.
  */
 export function sanitizeMessages(messages: ChatMessage[]): ChatMessage[] {
   if (!Array.isArray(messages) || messages.length === 0) {
     return [{ role: 'user', content: 'Hello' }];
   }
 
-  // 1. Filter out empty or whitespace-only messages
-  let valid: ChatMessage[] = [];
+  const valid: ChatMessage[] = [];
   for (const m of messages) {
-    if (!m) continue;
-    let content = '';
+    if (!m || !m.role) continue;
+    const hasToolMeta = Boolean((m.tool_calls && m.tool_calls.length) || m.tool_call_id);
+
     if (typeof m.content === 'string') {
-      content = m.content.trim();
+      const trimmed = m.content.trim();
+      if (trimmed.length > 0 || hasToolMeta) {
+        valid.push({ ...m, content: trimmed });
+      }
     } else if (Array.isArray(m.content)) {
-      content = m.content.map((c) => c.text || '').join('').trim();
-    }
-    if (content.length > 0) {
-      valid.push({ ...m, content });
+      const parts = m.content
+        .map((p) => (p && p.type === 'text' ? { ...p, text: (p.text || '').trim() } : p))
+        .filter((p) => p && (p.type !== 'text' || (p.text && p.text.length > 0)));
+      if (parts.length > 0 || hasToolMeta) {
+        valid.push({ ...m, content: parts });
+      }
+    } else if (hasToolMeta) {
+      valid.push({ ...m, content: '' });
     }
   }
 
@@ -157,7 +163,7 @@ export function sanitizeMessages(messages: ChatMessage[]): ChatMessage[] {
     return [{ role: 'user', content: 'Hello' }];
   }
 
-  // 2. Discard any leading 'assistant' messages (greeting messages in playground or UI)
+  // Discard any leading 'assistant' messages (greeting messages in playground or UI)
   while (valid.length > 0 && valid[0].role === 'assistant') {
     if (valid.length === 1) {
       // If it was the only message, turn it into a user message
@@ -167,9 +173,11 @@ export function sanitizeMessages(messages: ChatMessage[]): ChatMessage[] {
     valid.shift();
   }
 
-  // 3. Ensure there is at least one 'user' message
-  const hasUser = valid.some((m) => m.role === 'user');
-  if (!hasUser) {
+  // Ensure there is at least one user-like message (tool results also count)
+  const hasUserLike = valid.some(
+    (m) => m.role === 'user' || m.role === 'tool' || m.role === 'function'
+  );
+  if (!hasUserLike) {
     valid.push({ role: 'user', content: 'Proceed' });
   }
 
@@ -290,10 +298,16 @@ export function resolveCandidates(
     }
   }
 
-  // 4. If model is completely unrecognized and custom provider has a base URL,
-  //    put custom FIRST in the chain so it gets tried before Cloudflare fallback
-  const customBaseUrl = (headerKeys['x-custom-base-url'] || '').trim();
-  const isCustomConfigured = customBaseUrl && customBaseUrl !== 'http://localhost:11434/v1';
+  // 4. If the custom provider has a base URL configured (request header, dashboard
+  //    config or env), put custom FIRST in the chain so it gets tried before the
+  //    generic fallback tiers.
+  const customBaseUrl = (
+    headerKeys['x-custom-base-url'] ||
+    getProviderBaseUrl('custom', headerKeys) ||
+    ''
+  ).trim();
+  const isCustomConfigured =
+    customBaseUrl && customBaseUrl !== 'http://localhost:11434/v1' && !customBaseUrl.includes('{');
   if (isCustomConfigured) {
     const alreadyFirst = candidates[0]?.provider === 'custom';
     if (!alreadyFirst) {
@@ -324,7 +338,8 @@ export async function executeProviderAccountPoolCall(
   provider: ProviderId,
   model: string,
   request: ChatCompletionRequest,
-  headerKeys: Record<string, string> = {}
+  headerKeys: Record<string, string> = {},
+  signal?: AbortSignal
 ): Promise<{ response: Response; accountUsed?: ProviderAccount; errors: string[] }> {
   // Get all active accounts for this provider
   const accounts = getEffectiveProviderAccounts(provider, headerKeys).filter(
@@ -354,7 +369,7 @@ export async function executeProviderAccountPoolCall(
     const customUrl = (headerKeys['x-custom-base-url'] || '').trim() ||
       getProviderBaseUrl('custom', headerKeys);
     const customKey = (headerKeys['x-custom-key'] || '').trim();
-    const res = await callOpenAICompatible(customUrl, customKey, reqWithTargetModel);
+    const res = await callOpenAICompatible(customUrl, customKey, reqWithTargetModel, signal);
     return { response: res, errors: [] };
   }
 
@@ -387,11 +402,11 @@ export async function executeProviderAccountPoolCall(
     try {
       let res: Response;
       if (provider === 'anthropic') {
-        res = await callAnthropic(baseUrl, account.apiKey, reqWithTargetModel);
+        res = await callAnthropic(baseUrl, account.apiKey, reqWithTargetModel, signal);
       } else if (provider === 'gemini') {
-        res = await callGemini(baseUrl, account.apiKey, reqWithTargetModel);
+        res = await callGemini(baseUrl, account.apiKey, reqWithTargetModel, signal);
       } else {
-        res = await callOpenAICompatible(baseUrl, account.apiKey, reqWithTargetModel);
+        res = await callOpenAICompatible(baseUrl, account.apiKey, reqWithTargetModel, signal);
       }
 
       if (res.ok) {
@@ -417,7 +432,7 @@ export async function executeProviderAccountPoolCall(
       account.lastStatus = res.status === 429 ? 'rate_limited' : 'error';
       account.lastError = parsedMsg;
 
-      const logMsg = `Akun "${account.name}" (${account.apiKey ? account.apiKey.slice(0, 6) + '...' : ''}): Status ${res.status} - ${parsedMsg}`;
+      const logMsg = `Akun "${account.name}": Status ${res.status} - ${parsedMsg}`;
       poolErrors.push(logMsg);
       lastResponse = res;
       // Auto-failover immediately to the next account in this provider's pool!
@@ -450,9 +465,10 @@ export async function executeProviderAccountPoolCall(
 export async function executeCloudflarePoolCall(
   model: string,
   request: ChatCompletionRequest,
-  headerKeys: Record<string, string> = {}
+  headerKeys: Record<string, string> = {},
+  signal?: AbortSignal
 ): Promise<{ response: Response; accountUsed?: ProviderAccount; errors: string[] }> {
-  return await executeProviderAccountPoolCall('cloudflare', model, request, headerKeys);
+  return await executeProviderAccountPoolCall('cloudflare', model, request, headerKeys, signal);
 }
 
 /**
@@ -508,18 +524,24 @@ export async function routeChatCompletion(
     }
 
     try {
-      // Execute provider call with 110s timeout for serverless (streaming can be long)
+      // Execute provider call with a 110s timeout for serverless (streaming can be long).
+      // The signal is passed down to fetch(), so hung upstreams are actually aborted.
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 110000);
 
-      // Execute across the provider's multi-account pool with automatic account failover
-      const poolResult = await executeProviderAccountPoolCall(
-        candidate.provider,
-        candidate.model,
-        request,
-        headerKeys
-      );
-      clearTimeout(timeoutId);
+      let poolResult;
+      try {
+        // Execute across the provider's multi-account pool with automatic account failover
+        poolResult = await executeProviderAccountPoolCall(
+          candidate.provider,
+          candidate.model,
+          request,
+          headerKeys,
+          controller.signal
+        );
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       const res = poolResult.response;
       const accountUsed = poolResult.accountUsed;

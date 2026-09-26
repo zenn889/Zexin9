@@ -1,28 +1,109 @@
 import { ChatCompletionRequest, ChatMessage } from '../types';
 
+type GeminiPart = Record<string, any>;
+
+function toInlineDataPart(part: any): GeminiPart | null {
+  const url: string | undefined = part?.image_url?.url;
+  if (!url) return null;
+  const match = url.match(/^data:([^;]+);base64,(.+)$/);
+  if (match) {
+    return { inline_data: { mime_type: match[1], data: match[2] } };
+  }
+  if (/^https?:\/\//.test(url)) {
+    return { file_data: { file_uri: url } };
+  }
+  return null;
+}
+
+/**
+ * Converts internal OpenAI-style messages into Gemini `contents`,
+ * preserving text, images, tool calls and tool results.
+ */
 export function convertToGeminiContents(messages: ChatMessage[]) {
   let systemInstruction: string | undefined = undefined;
-  const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+  const contents: Array<{ role: 'user' | 'model'; parts: GeminiPart[] }> = [];
+
+  // Map tool_call_id -> function name so tool results can be attributed on the
+  // Gemini functionResponse (which requires the function name, not the call id).
+  const toolNamesById = new Map<string, string>();
+  for (const msg of messages) {
+    for (const tc of msg?.tool_calls || []) {
+      if (tc?.id) toolNamesById.set(tc.id, tc?.function?.name || 'tool');
+    }
+  }
+
+  const pushParts = (role: 'user' | 'model', parts: GeminiPart[]) => {
+    if (parts.length === 0) return;
+    const last = contents[contents.length - 1];
+    if (last && last.role === role) {
+      last.parts.push(...parts);
+    } else {
+      contents.push({ role, parts });
+    }
+  };
+
+  const addTextParts = (parts: GeminiPart[], content: ChatMessage['content']) => {
+    if (typeof content === 'string') {
+      if (content.trim()) parts.push({ text: content });
+    } else if (Array.isArray(content)) {
+      for (const part of content) {
+        if (part?.type === 'text' && part.text) parts.push({ text: part.text });
+        else if (part?.type === 'image_url') {
+          const inline = toInlineDataPart(part);
+          if (inline) parts.push(inline);
+        }
+      }
+    }
+  };
 
   for (const msg of messages) {
+    if (!msg) continue;
+
     if (msg.role === 'system') {
       const text = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
       systemInstruction = systemInstruction ? `${systemInstruction}\n\n${text}` : text;
-    } else {
-      const role = msg.role === 'assistant' ? 'model' : 'user';
-      let text = '';
-      if (typeof msg.content === 'string') {
-        text = msg.content;
-      } else if (Array.isArray(msg.content)) {
-        text = msg.content
-          .map((part) => (part.type === 'text' ? part.text || '' : ''))
-          .join('\n');
-      }
-      contents.push({
-        role,
-        parts: [{ text }],
-      });
+      continue;
     }
+
+    if (msg.role === 'assistant') {
+      const parts: GeminiPart[] = [];
+      addTextParts(parts, msg.content);
+      for (const tc of msg.tool_calls || []) {
+        const fn = tc?.function || {};
+        let args: any = {};
+        try {
+          args = fn.arguments ? JSON.parse(fn.arguments) : {};
+        } catch {
+          args = { _raw: fn.arguments };
+        }
+        parts.push({ functionCall: { name: fn.name || 'tool', args } });
+      }
+      pushParts('model', parts);
+      continue;
+    }
+
+    if (msg.role === 'tool' || msg.role === 'function') {
+      const name = toolNamesById.get(msg.tool_call_id || '') || msg.name || 'tool';
+      const text =
+        typeof msg.content === 'string'
+          ? msg.content
+          : Array.isArray(msg.content)
+            ? msg.content.map((p: any) => p?.text || '').join('\n')
+            : '';
+      let response: any = { result: text };
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === 'object') response = { result: parsed };
+      } catch {
+        // keep raw text
+      }
+      pushParts('user', [{ functionResponse: { name, response } }]);
+      continue;
+    }
+
+    const parts: GeminiPart[] = [];
+    addTextParts(parts, msg.content);
+    pushParts('user', parts);
   }
 
   if (contents.length === 0) {
@@ -32,10 +113,56 @@ export function convertToGeminiContents(messages: ChatMessage[]) {
   return { systemInstruction, contents };
 }
 
+function convertToolsToGemini(tools: any[] | undefined) {
+  const declarations = (tools || [])
+    .map((t: any) =>
+      t?.type === 'function' && t.function?.name
+        ? {
+            name: t.function.name,
+            description: t.function.description,
+            parameters: t.function.parameters || { type: 'object', properties: {} },
+          }
+        : null
+    )
+    .filter(Boolean);
+  return declarations;
+}
+
+function convertToolChoiceToGemini(toolChoice: any) {
+  if (!toolChoice) return undefined;
+  if (typeof toolChoice === 'string') {
+    if (toolChoice === 'auto') return { functionCallingConfig: { mode: 'AUTO' } };
+    if (toolChoice === 'required') return { functionCallingConfig: { mode: 'ANY' } };
+    if (toolChoice === 'none') return { functionCallingConfig: { mode: 'NONE' } };
+    return undefined;
+  }
+  if (toolChoice?.type === 'function' && toolChoice.function?.name) {
+    return {
+      functionCallingConfig: { mode: 'ANY', allowedFunctionNames: [toolChoice.function.name] },
+    };
+  }
+  return undefined;
+}
+
+function mapFinishReasonToOpenAI(reason: string | undefined): string | null {
+  switch (reason) {
+    case 'STOP':
+      return 'stop';
+    case 'MAX_TOKENS':
+      return 'length';
+    case 'SAFETY':
+    case 'RECITATION':
+      return 'content_filter';
+    default:
+      return null;
+  }
+}
+
 export async function callGemini(
   baseUrl: string,
   apiKey: string,
-  request: ChatCompletionRequest
+  request: ChatCompletionRequest,
+  signal?: AbortSignal
 ): Promise<Response> {
   const { systemInstruction, contents } = convertToGeminiContents(request.messages);
 
@@ -61,12 +188,20 @@ export async function callGemini(
     };
   }
 
+  const geminiTools = convertToolsToGemini(request.tools);
+  if (geminiTools.length > 0) {
+    body.tools = [{ functionDeclarations: geminiTools }];
+    const toolConfig = convertToolChoiceToGemini(request.tool_choice);
+    if (toolConfig) body.toolConfig = toolConfig;
+  }
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
+    signal,
   });
 
   if (!response.ok) {
@@ -77,9 +212,20 @@ export async function callGemini(
   if (!isStream) {
     const data = await response.json();
     const candidate = data.candidates?.[0];
-    const text = candidate?.content?.parts?.map((p: any) => p.text).join('') || '';
+    const parts: any[] = candidate?.content?.parts || [];
+    const text = parts.map((p: any) => p?.text || '').join('');
+    const toolCalls = parts
+      .filter((p: any) => p?.functionCall)
+      .map((p: any, idx: number) => ({
+        id: `call_${Date.now().toString(36)}${idx}`,
+        type: 'function',
+        function: {
+          name: p.functionCall?.name || 'tool',
+          arguments: JSON.stringify(p.functionCall?.args ?? {}),
+        },
+      }));
 
-    const openAIFormat = {
+    const openAIFormat: any = {
       id: `chatcmpl-${Date.now()}`,
       object: 'chat.completion',
       created: Math.floor(Date.now() / 1000),
@@ -90,8 +236,12 @@ export async function callGemini(
           message: {
             role: 'assistant',
             content: text,
+            ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
           },
-          finish_reason: candidate?.finishReason === 'STOP' ? 'stop' : 'stop',
+          finish_reason:
+            toolCalls.length > 0
+              ? 'tool_calls'
+              : mapFinishReasonToOpenAI(candidate?.finishReason) || 'stop',
         },
       ],
       usage: {
@@ -119,6 +269,19 @@ export async function callGemini(
   const transformStream = new ReadableStream({
     async start(controller) {
       let buffer = '';
+      let finishReason: string | null = null;
+      let toolCallCount = 0;
+
+      const emitChunk = (delta: any, finish: string | null = null) => {
+        const chunk = {
+          id: streamId,
+          object: 'chat.completion.chunk',
+          created,
+          model: request.model,
+          choices: [{ index: 0, delta, finish_reason: finish }],
+        };
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+      };
 
       try {
         while (true) {
@@ -137,23 +300,32 @@ export async function callGemini(
 
             try {
               const parsed = JSON.parse(dataStr);
-              const partText = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-              if (partText) {
-                const chunk = {
-                  id: streamId,
-                  object: 'chat.completion.chunk',
-                  created,
-                  model: request.model,
-                  choices: [
-                    {
-                      index: 0,
-                      delta: { content: partText },
-                      finish_reason: null,
-                    },
-                  ],
-                };
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+              const candidate = parsed.candidates?.[0];
+              const parts: any[] = candidate?.content?.parts || [];
+
+              for (const part of parts) {
+                if (part?.text) {
+                  emitChunk({ content: part.text });
+                } else if (part?.functionCall) {
+                  emitChunk({
+                    tool_calls: [
+                      {
+                        index: toolCallCount,
+                        id: `call_${Date.now().toString(36)}${toolCallCount}`,
+                        type: 'function',
+                        function: {
+                          name: part.functionCall?.name || 'tool',
+                          arguments: JSON.stringify(part.functionCall?.args ?? {}),
+                        },
+                      },
+                    ],
+                  });
+                  toolCallCount++;
+                }
               }
+
+              const mapped = mapFinishReasonToOpenAI(candidate?.finishReason);
+              if (mapped) finishReason = mapped;
             } catch {
               // ignore parse errors
             }
@@ -161,20 +333,7 @@ export async function callGemini(
         }
 
         // Final closing chunk
-        const finalChunk = {
-          id: streamId,
-          object: 'chat.completion.chunk',
-          created,
-          model: request.model,
-          choices: [
-            {
-              index: 0,
-              delta: {},
-              finish_reason: 'stop',
-            },
-          ],
-        };
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`));
+        emitChunk({}, finishReason || (toolCallCount > 0 ? 'tool_calls' : 'stop'));
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       } catch (err: any) {
         controller.error(err);

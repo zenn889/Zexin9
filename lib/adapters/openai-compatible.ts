@@ -3,7 +3,8 @@ import { ChatCompletionRequest } from '../types';
 export async function callOpenAICompatible(
   endpoint: string,
   apiKey: string,
-  request: ChatCompletionRequest
+  request: ChatCompletionRequest,
+  signal?: AbortSignal
 ): Promise<Response> {
   const url = endpoint.endsWith('/chat/completions')
     ? endpoint
@@ -32,5 +33,6 @@ export async function callOpenAICompatible(
     method: 'POST',
     headers,
     body: JSON.stringify(body),
+    signal,
   });
 }

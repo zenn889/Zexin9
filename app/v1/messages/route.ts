@@ -1,7 +1,13 @@
 import { getGatewaySecret } from '@/lib/config';
 import { db } from '@/lib/db';
 import { routeChatCompletion } from '@/lib/router';
-import { ChatCompletionRequest, ChatMessage } from '@/lib/types';
+import { extractClientToken } from '@/lib/auth';
+import {
+  anthropicToOpenAIRequest,
+  openAIToAnthropicResponse,
+  createAnthropicSSEStreamFromOpenAI,
+  anthropicErrorResponse,
+} from '@/lib/anthropic-compat';
 import { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -20,69 +26,32 @@ export async function OPTIONS() {
   });
 }
 
+/**
+ * Anthropic-native endpoint (/v1/messages) for Claude Code CLI and the
+ * Anthropic SDK. Requests are translated into the internal OpenAI-style format
+ * for routing/fallback, and responses (JSON and SSE) are translated back into
+ * the Anthropic Messages format — including tool_use blocks.
+ */
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
 
   try {
+    // 1. Gateway authentication (master key, client token, or dashboard cookie)
     const gatewaySecret = getGatewaySecret() || db.getMasterKey();
-    let clientKey =
-      req.headers.get('x-api-key') ||
-      req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||
-      '';
-
-    if (!clientKey) {
-      const cookieHeader = req.headers.get('cookie') || '';
-      const match = cookieHeader.match(/(?:zexin9_auth|9router_auth|9router_session)=([^;]+)/);
-      if (match) {
-        clientKey = decodeURIComponent(match[1]).trim();
-      }
-    }
-
+    const clientKey = extractClientToken(req);
     const hasSecretConfigured = Boolean(gatewaySecret && gatewaySecret.trim().length > 0);
 
     if (hasSecretConfigured) {
       const isValid = db.verifyToken(clientKey);
       if (!isValid) {
-        return new Response(
-          JSON.stringify({
-            type: 'error',
-            error: { type: 'authentication_error', message: 'Invalid API Key / Bearer Token' },
-          }),
-          { status: 401, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
-        );
+        return anthropicErrorResponse(401, 'Invalid API Key / Bearer Token');
       }
     }
 
+    // 2. Convert the Anthropic Messages request into the internal OpenAI format
     const body = await req.json();
-    const model = body.model || 'claude-3-5-sonnet-20241022';
-    const isStream = Boolean(body.stream);
-
-    // Convert Anthropic messages to standard ChatMessage array
-    const messages: ChatMessage[] = [];
-
-    if (body.system) {
-      messages.push({
-        role: 'system',
-        content: typeof body.system === 'string' ? body.system : JSON.stringify(body.system),
-      });
-    }
-
-    if (Array.isArray(body.messages)) {
-      for (const m of body.messages) {
-        messages.push({
-          role: m.role === 'assistant' ? 'assistant' : 'user',
-          content: m.content,
-        });
-      }
-    }
-
-    const openAIRequest: ChatCompletionRequest = {
-      model,
-      messages,
-      temperature: body.temperature,
-      max_tokens: body.max_tokens || 8192,
-      stream: isStream,
-    };
+    const openAIRequest = anthropicToOpenAIRequest(body);
+    const isStream = openAIRequest.stream === true;
 
     const headerKeys: Record<string, string> = {};
     req.headers.forEach((val, key) => {
@@ -92,16 +61,17 @@ export async function POST(req: NextRequest) {
       }
     });
 
+    // 3. Route with multi-tier fallback
     const result = await routeChatCompletion(openAIRequest, headerKeys);
     const latencyMs = Date.now() - startTime;
-    const promptTokens = Math.round(JSON.stringify(messages).length / 4);
+    const promptTokens = Math.round(JSON.stringify(openAIRequest.messages).length / 4);
 
-    // Log request
+    // 4. Log request
     db.addLog({
       id: `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       timestamp: new Date().toISOString(),
-      client: clientKey ? clientKey.slice(0, 16) + '...' : 'Claude Code CLI',
-      requestedModel: model,
+      client: db.describeClient(clientKey),
+      requestedModel: openAIRequest.model,
       servedProvider: result.servedBy,
       servedModel: result.servedModel,
       fallbackCount: result.fallbackCount,
@@ -110,33 +80,62 @@ export async function POST(req: NextRequest) {
           ? `Failover to ${result.servedBy}`
           : 'Claude Code Direct Route',
       promptTokens,
-      completionTokens: 40,
+      completionTokens: 0,
       tokensSaved: result.tokensSaved,
       latencyMs,
       status: result.response.status,
     });
 
-    // Return the response directly
-    const responseHeaders = new Headers(result.response.headers);
+    // 5. Translate the response back into Anthropic Messages format
+    if (!result.response.ok) {
+      const errText = await result.response.text().catch(() => '');
+      let message = errText.slice(0, 300);
+      try {
+        const parsed = JSON.parse(errText);
+        message = parsed?.error?.message || parsed?.message || message;
+      } catch {
+        // keep raw text
+      }
+      const status =
+        result.response.status >= 400 && result.response.status < 600
+          ? result.response.status
+          : 502;
+      return anthropicErrorResponse(status, message || `Gateway upstream error (${result.response.status})`);
+    }
+
+    if (isStream) {
+      if (!result.response.body) {
+        return anthropicErrorResponse(502, 'Upstream returned an empty stream');
+      }
+      const anthropicStream = createAnthropicSSEStreamFromOpenAI(
+        result.response.body,
+        openAIRequest.model
+      );
+      const responseHeaders = new Headers();
+      Object.entries(CORS_HEADERS).forEach(([k, v]) => responseHeaders.set(k, v));
+      responseHeaders.set('Content-Type', 'text/event-stream; charset=utf-8');
+      responseHeaders.set('Cache-Control', 'no-cache, no-transform');
+      responseHeaders.set('Connection', 'keep-alive');
+      responseHeaders.set('x-router-provider', result.servedBy);
+      responseHeaders.set('x-router-model', result.servedModel);
+      return new Response(anthropicStream, { status: 200, headers: responseHeaders });
+    }
+
+    const data = await result.response.json().catch(() => null);
+    if (!data) {
+      return anthropicErrorResponse(502, 'Invalid upstream response payload');
+    }
+
+    const responseHeaders = new Headers();
     Object.entries(CORS_HEADERS).forEach(([k, v]) => responseHeaders.set(k, v));
+    responseHeaders.set('Content-Type', 'application/json');
     responseHeaders.set('x-router-provider', result.servedBy);
     responseHeaders.set('x-router-model', result.servedModel);
-
-    // Strip compression headers so client decoder does not fail
-    responseHeaders.delete('content-encoding');
-    responseHeaders.delete('content-length');
-
-    return new Response(result.response.body, {
-      status: result.response.status,
+    return new Response(JSON.stringify(openAIToAnthropicResponse(data)), {
+      status: 200,
       headers: responseHeaders,
     });
   } catch (err: any) {
-    return new Response(
-      JSON.stringify({
-        type: 'error',
-        error: { type: 'api_error', message: err.message || 'Gateway Internal Error' },
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
-    );
+    return anthropicErrorResponse(500, err?.message || 'Gateway Internal Error');
   }
 }
