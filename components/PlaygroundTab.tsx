@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   AlertCircle,
   Bot,
@@ -210,12 +210,88 @@ export function PlaygroundTab({
   // Providers tab) — shown with ✅ in the model dropdown so users pick models
   // that are known to work on their endpoint.
   const [verifiedModels, setVerifiedModels] = useState<Record<string, string[]>>({});
+  // Models read from the SERVER config (accounts + detectedModels stored in the
+  // database), so the dropdown works even when this browser's localStorage was
+  // never written (other device, cleared storage, account added earlier).
+  const [serverModels, setServerModels] = useState<Record<string, string[]>>({});
+  const [serverVerified, setServerVerified] = useState<Record<string, string[]>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  // --- Server-driven model list: the Playground should show the models that are
+  // configured server-side (accounts + detectedModels in the database), not only
+  // whatever this browser's localStorage happens to hold.
+  const refreshServerModels = useCallback(async () => {
+    try {
+      const res = await fetch('/api/providers/config', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const accounts: Array<{
+        provider?: string;
+        enabled?: boolean;
+        detectedModels?: string[];
+        verifiedModels?: string[];
+      }> = Array.isArray(data?.providerAccounts) ? data.providerAccounts : [];
+      const detectedByProvider: Record<string, string[]> = {};
+      const verifiedByProvider: Record<string, string[]> = {};
+      accounts.forEach((acc) => {
+        if (!acc || acc.enabled === false) return;
+        const pid = String(acc.provider || '').trim();
+        if (!pid) return;
+        const detected = Array.isArray(acc.detectedModels) ? acc.detectedModels : [];
+        const verified = Array.isArray(acc.verifiedModels) ? acc.verifiedModels : [];
+        const list = detectedByProvider[pid] || [];
+        [...verified, ...detected].forEach((m) => {
+          const mm = String(m || '').trim();
+          if (mm && !list.includes(mm)) list.push(mm);
+        });
+        detectedByProvider[pid] = list;
+        const vlist = verifiedByProvider[pid] || [];
+        verified.forEach((m) => {
+          const mm = String(m || '').trim();
+          if (mm && !vlist.includes(mm)) vlist.push(mm);
+        });
+        verifiedByProvider[pid] = vlist;
+      });
+      setServerModels(detectedByProvider);
+      setServerVerified(verifiedByProvider);
+    } catch {
+      // keep whatever we already have
+    }
+  }, []);
+
+  const reloadLocalModelLists = useCallback(() => {
+    try {
+      const storedUserModels =
+        localStorage.getItem('zexin9_user_models') || localStorage.getItem('9router_user_models');
+      if (storedUserModels) setUserCustomModels(JSON.parse(storedUserModels));
+      const storedVerified = localStorage.getItem('zexin9_verified_models');
+      if (storedVerified) setVerifiedModels(JSON.parse(storedVerified));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshServerModels();
+    const onChange = () => {
+      reloadLocalModelLists();
+      void refreshServerModels();
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key || e.key.includes('models') || e.key.includes('provider_accounts')) onChange();
+    };
+    window.addEventListener('zexin9-config-changed', onChange);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('zexin9-config-changed', onChange);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [refreshServerModels, reloadLocalModelLists]);
 
   // --- 1. Load Sessions from localStorage on Mount ---
   useEffect(() => {
@@ -989,17 +1065,28 @@ export function PlaygroundTab({
                 </optgroup>
                 {DEFAULT_PROVIDERS.map((p) => {
                   const customList = userCustomModels[p.id] || [];
-                  const verifiedList = verifiedModels[p.id] || [];
+                  const detectedList = serverModels[p.id] || [];
+                  const verifiedList = Array.from(
+                    new Set([...(verifiedModels[p.id] || []), ...(serverVerified[p.id] || [])])
+                  );
+                  const extras = Array.from(new Set([...detectedList, ...customList])).filter(
+                    (m) => !p.models.includes(m)
+                  );
                   return (
                     <optgroup key={p.id} label={`🔹 ${p.name}`}>
+                      {extras.length === 0 && p.id === 'custom' && (
+                        <option value="" disabled>
+                          — belum ada model custom: hubungkan akun dulu di tab Providers —
+                        </option>
+                      )}
+                      {extras.map((m) => (
+                        <option key={`${p.id}-custom-${m}`} value={m}>
+                          {verifiedList.includes(m) ? '✅' : '⭐'} {m}
+                        </option>
+                      ))}
                       {p.models.map((m) => (
                         <option key={`${p.id}-${m}`} value={m}>
                           {m}
-                        </option>
-                      ))}
-                      {customList.map((m) => (
-                        <option key={`${p.id}-custom-${m}`} value={m}>
-                          {verifiedList.includes(m) ? '✅' : '⭐'} {m}
                         </option>
                       ))}
                     </optgroup>

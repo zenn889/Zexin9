@@ -156,7 +156,9 @@ export function ProvidersTab({
   const providerAccountsRef = useRef<ProviderAccount[]>([]);
   const autoDetectRanRef = useRef(false);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
-  const [newAccProvider, setNewAccProvider] = useState<ProviderId>('deepseek');
+  // Which account card is currently having its provider changed inline.
+  const [editingAccProviderId, setEditingAccProviderId] = useState<string | null>(null);
+  const [newAccProvider, setNewAccProvider] = useState<ProviderId>('custom');
   const [newAccName, setNewAccName] = useState('');
   const [newAccKey, setNewAccKey] = useState('');
   const [newAccAccountId, setNewAccAccountId] = useState('');
@@ -388,6 +390,8 @@ export function ProvidersTab({
     setProviderAccounts(updated);
     if (typeof window !== 'undefined') {
       localStorage.setItem('zexin9_provider_accounts', JSON.stringify(updated));
+      // Let other mounted tabs (Playground model list) refresh immediately.
+      window.dispatchEvent(new Event('zexin9-config-changed'));
     }
     // Auto sync with server database
     fetch('/api/providers/config', {
@@ -626,6 +630,7 @@ export function ProvidersTab({
       if (typeof window !== 'undefined') {
         localStorage.setItem('zexin9_user_models', JSON.stringify(updated));
         localStorage.setItem('9router_user_models', JSON.stringify(updated));
+        window.dispatchEvent(new Event('zexin9-config-changed'));
       }
       return updated;
     });
@@ -648,6 +653,7 @@ export function ProvidersTab({
       const existing: string[] = Array.isArray(map[providerId]) ? map[providerId] : [];
       map[providerId] = Array.from(new Set([...existing, ...cleaned]));
       localStorage.setItem('zexin9_verified_models', JSON.stringify(map));
+      window.dispatchEvent(new Event('zexin9-config-changed'));
     } catch {
       // ignore storage errors
     }
@@ -1329,9 +1335,40 @@ export function ProvidersTab({
 
                         {/* Details */}
                         <div className="space-y-1 text-[11px] font-mono text-slate-400 mb-2.5">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-2">
                             <span className="text-slate-500">Provider:</span>
-                            <span className="text-cyan-300 uppercase text-[10px] font-semibold">{acc.provider}</span>
+                            {editingAccProviderId === acc.id ? (
+                              <select
+                                autoFocus
+                                value={acc.provider}
+                                onChange={(e) => {
+                                  updateAccount(acc.id, { provider: e.target.value as ProviderId });
+                                  setEditingAccProviderId(null);
+                                }}
+                                onBlur={() => setEditingAccProviderId(null)}
+                                className="bg-slate-900 border border-cyan-800/60 rounded px-1 py-0.5 text-[10px] text-cyan-300"
+                              >
+                                {DEFAULT_PROVIDERS.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="flex items-center gap-1.5">
+                                <span className="text-cyan-300 uppercase text-[10px] font-semibold">
+                                  {acc.provider}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingAccProviderId(acc.id)}
+                                  className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-white/[0.08] text-slate-400 hover:text-cyan-300 hover:border-cyan-500/40 transition"
+                                  title="Ubah provider akun ini (mis. dari deepseek ke Custom)"
+                                >
+                                  Ubah
+                                </button>
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-slate-500">API Key:</span>

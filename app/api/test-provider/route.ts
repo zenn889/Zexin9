@@ -1,6 +1,6 @@
 import { executeProviderCall } from '@/lib/router';
 import { db } from '@/lib/db';
-import { ChatCompletionRequest, ProviderId } from '@/lib/types';
+import { ChatCompletionRequest, ProviderAccount, ProviderId } from '@/lib/types';
 import { requireAuth } from '@/lib/auth';
 import { getProviderApiKey, getProviderBaseUrl, getEffectiveProviderAccounts } from '@/lib/config';
 import { buildModelsUrl } from '@/lib/adapters/openai-compatible';
@@ -137,6 +137,63 @@ async function discoverModels(baseUrl: string, apiKey: string): Promise<string[]
   }
 }
 
+/**
+ * Persist auto-detection results onto the matching provider account (server
+ * side) so every surface — including the Playground model list — sees the
+ * discovered/verified models even when the browser that ran the test never
+ * saved them locally.
+ */
+function persistDetectionToAccounts(
+  providerId: ProviderId,
+  body: { accountId?: string; apiKey?: string; baseUrl?: string },
+  modelsFound: string[],
+  modelStatuses: Array<{ model: string; ok: boolean; status: number }>,
+  overallOk: boolean,
+  latency?: number,
+  errorText?: string
+) {
+  try {
+    const accounts = db.getProviderAccounts();
+    if (accounts.length === 0) return;
+    const wantedId = (body.accountId || '').trim();
+    const wantedUrl = (body.baseUrl || '').trim().replace(/\/+$/, '');
+    const wantedKey = (body.apiKey || '').trim();
+    if (!wantedId && !wantedUrl && !wantedKey) return;
+
+    let changed = false;
+    const updated = accounts.map((acc) => {
+      if (acc.provider !== providerId) return acc;
+      const accUrl = (acc.baseUrl || '').trim().replace(/\/+$/, '');
+      const matches =
+        (wantedId && acc.id === wantedId) ||
+        (wantedUrl && accUrl === wantedUrl) ||
+        (wantedKey && acc.apiKey === wantedKey);
+      if (!matches) return acc;
+
+      const detected = new Set<string>([...(acc.detectedModels || []), ...modelsFound]);
+      const verified = new Set<string>(acc.verifiedModels || []);
+      modelStatuses
+        .filter((s) => s.ok && s.model)
+        .forEach((s) => verified.add(s.model));
+
+      const next: ProviderAccount = {
+        ...acc,
+        detectedModels: Array.from(detected),
+        ...(verified.size > 0 ? { verifiedModels: Array.from(verified) } : {}),
+        lastDetectedAt: new Date().toISOString(),
+        lastStatus: overallOk ? 'ok' : 'error',
+        ...(overallOk && latency !== undefined ? { latencyMs: latency } : {}),
+        ...(errorText ? { lastError: errorText } : {}),
+      };
+      changed = true;
+      return next;
+    });
+    if (changed) db.saveProviderAccounts(updated);
+  } catch {
+    // best-effort: never fail the provider test because of a persistence hiccup
+  }
+}
+
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
@@ -249,6 +306,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (usedModel && usedAttempt) {
+      persistDetectionToAccounts(
+        providerId,
+        { accountId, apiKey, baseUrl },
+        modelsFound,
+        attemptResults,
+        true,
+        usedAttempt.latency
+      );
       return jsonResponse({
         success: true,
         status: usedAttempt.status,
@@ -280,6 +345,16 @@ export async function POST(req: NextRequest) {
         ? `409 Conflict: endpoint menolak model ini (belum siap/saluran sibuk). Ada ${modelsFound.length} model lain yang tersedia — pilih salah satu dari daftar di atas.`
         : `Endpoint Anda menyediakan ${modelsFound.length} model — pilih salah satu dari daftar di atas.`;
     }
+
+    persistDetectionToAccounts(
+      providerId,
+      { accountId, apiKey, baseUrl },
+      modelsFound,
+      attemptResults,
+      false,
+      undefined,
+      String(finalAttempt?.errorText || '').slice(0, 200)
+    );
 
     return jsonResponse({
       success: false,
