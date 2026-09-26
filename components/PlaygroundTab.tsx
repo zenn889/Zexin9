@@ -582,6 +582,34 @@ export function PlaygroundTab({
         if (urlVal && urlVal.trim()) headers[`x-${pId}-base-url`] = urlVal.trim();
       });
 
+      // Re-read baseUrls and keys from localStorage to catch any updates from ProvidersTab
+      // that haven't propagated to props yet (different localStorage keys used by ProvidersTab)
+      if (typeof window !== 'undefined') {
+        try {
+          const lsBaseUrls = JSON.parse(
+            localStorage.getItem('zexin9_baseurls') ||
+            localStorage.getItem('9router_baseurls') || '{}'
+          );
+          Object.entries(lsBaseUrls).forEach(([pId, urlVal]) => {
+            if (typeof urlVal === 'string' && urlVal.trim() && !headers[`x-${pId}-base-url`]) {
+              headers[`x-${pId}-base-url`] = urlVal.trim();
+            }
+          });
+
+          const lsKeys = JSON.parse(
+            localStorage.getItem('zexin9_keys') ||
+            localStorage.getItem('9router_keys') || '{}'
+          );
+          Object.entries(lsKeys).forEach(([pId, keyVal]) => {
+            if (typeof keyVal === 'string' && keyVal.trim() && !headers[`x-${pId}-key`]) {
+              headers[`x-${pId}-key`] = keyVal.trim();
+            }
+          });
+        } catch {
+          // ignore JSON parse errors
+        }
+      }
+
       // Always send Cloudflare Account ID so router can build the correct base URL
       if (typeof window !== 'undefined') {
         const cfAccountId =

@@ -540,6 +540,7 @@ export function ProvidersTab({
     setKeys((prev) => {
       const updated = { ...prev, [providerId]: value };
       if (typeof window !== 'undefined') {
+        localStorage.setItem('zexin9_keys', JSON.stringify(updated));
         localStorage.setItem('9router_keys', JSON.stringify(updated));
       }
       return updated;
@@ -550,6 +551,7 @@ export function ProvidersTab({
     setBaseUrls((prev) => {
       const updated = { ...prev, [providerId]: value };
       if (typeof window !== 'undefined') {
+        localStorage.setItem('zexin9_baseurls', JSON.stringify(updated));
         localStorage.setItem('9router_baseurls', JSON.stringify(updated));
       }
       return updated;

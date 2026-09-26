@@ -265,12 +265,45 @@ export function resolveCandidates(
   // 3. Multi-Provider Pool Inclusion: Append ANY provider configured by the user that has accounts or a key
   for (const prov of DEFAULT_PROVIDERS) {
     if (!candidates.some((c) => c.provider === prov.id)) {
+      // Custom provider: active if it has a base URL configured (API key is optional for Ollama)
+      if (prov.id === 'custom') {
+        const customBaseUrl = (
+          headerKeys['x-custom-base-url'] ||
+          getProviderBaseUrl('custom', headerKeys)
+        ).trim();
+        // Only skip custom if it's literally the default localhost (not user-configured)
+        const isUserConfigured = customBaseUrl &&
+          customBaseUrl !== 'http://localhost:11434/v1' &&
+          !customBaseUrl.includes('{');
+        if (isUserConfigured) {
+          candidates.push({ provider: 'custom', model: requestedModel });
+        }
+        continue;
+      }
       const accounts = getEffectiveProviderAccounts(prov.id, headerKeys);
       const hasKey =
         accounts.some((a) => a.enabled !== false) ||
         Boolean(getProviderApiKey(prov.id, headerKeys));
       if (hasKey) {
         candidates.push({ provider: prov.id, model: prov.models[0] });
+      }
+    }
+  }
+
+  // 4. If model is completely unrecognized and custom provider has a base URL,
+  //    put custom FIRST in the chain so it gets tried before Cloudflare fallback
+  const customBaseUrl = (headerKeys['x-custom-base-url'] || '').trim();
+  const isCustomConfigured = customBaseUrl && customBaseUrl !== 'http://localhost:11434/v1';
+  if (isCustomConfigured) {
+    const alreadyFirst = candidates[0]?.provider === 'custom';
+    if (!alreadyFirst) {
+      // Move custom to front if it's in the list, otherwise insert it
+      const customIdx = candidates.findIndex((c) => c.provider === 'custom');
+      if (customIdx > 0) {
+        const [customEntry] = candidates.splice(customIdx, 1);
+        candidates.unshift(customEntry);
+      } else if (customIdx === -1) {
+        candidates.unshift({ provider: 'custom', model: requestedModel });
       }
     }
   }
@@ -316,10 +349,12 @@ export async function executeProviderAccountPoolCall(
     messages: sanitizedMessages,
   };
 
-  // If custom provider with no specific accounts, use custom base url
+  // If custom provider with no specific accounts, use custom base url from header or env
   if (accounts.length === 0 && provider === 'custom') {
-    const customUrl = getProviderBaseUrl('custom', headerKeys);
-    const res = await callOpenAICompatible(customUrl, '', reqWithTargetModel);
+    const customUrl = (headerKeys['x-custom-base-url'] || '').trim() ||
+      getProviderBaseUrl('custom', headerKeys);
+    const customKey = (headerKeys['x-custom-key'] || '').trim();
+    const res = await callOpenAICompatible(customUrl, customKey, reqWithTargetModel);
     return { response: res, errors: [] };
   }
 
