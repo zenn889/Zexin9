@@ -190,19 +190,22 @@ function persistDetectionToAccounts(
   try {
     const accounts = db.getProviderAccounts();
     const wantedId = (body.accountId || '').trim();
-    const wantedUrl = (body.baseUrl || '').trim().replace(/\/+$/, '');
+    const normUrl = (u?: string) => String(u || '').trim().replace(/\/+$/, '');
+    const wantedUrl = normUrl(body.baseUrl);
     const wantedKey = (body.apiKey || '').trim();
     if (!wantedId && !wantedUrl && !wantedKey) return;
+
+    // Prefer the exact credential: two accounts can share one endpoint URL but
+    // carry different API keys, and a ping must only update its own account.
+    const matchAccount = (acc: any) =>
+      (Boolean(wantedId) && acc.id === wantedId) ||
+      (Boolean(wantedKey) && acc.apiKey === wantedKey) ||
+      (!wantedKey && Boolean(wantedUrl) && normUrl(acc.baseUrl) === wantedUrl);
 
     let changed = false;
     const updated = accounts.map((acc) => {
       if (acc.provider !== providerId) return acc;
-      const accUrl = (acc.baseUrl || '').trim().replace(/\/+$/, '');
-      const matches =
-        (wantedId && acc.id === wantedId) ||
-        (wantedUrl && accUrl === wantedUrl) ||
-        (wantedKey && acc.apiKey === wantedKey);
-      if (!matches) return acc;
+      if (!matchAccount(acc)) return acc;
 
       const detected = new Set<string>([...(acc.detectedModels || []), ...modelsFound]);
       const verified = new Set<string>(acc.verifiedModels || []);
@@ -235,7 +238,7 @@ function persistDetectionToAccounts(
           const matchesCf =
             (wantedId && cf.id === wantedId) ||
             (Boolean(body.accountId) && cf.accountId === String(body.accountId).trim()) ||
-            (wantedKey && cf.apiToken === wantedKey);
+            (Boolean(wantedKey) && cf.apiToken === wantedKey);
           if (!matchesCf) return cf;
           const detected = new Set<string>([...(cf.detectedModels || []), ...modelsFound]);
           const verified = new Set<string>(cf.verifiedModels || []);

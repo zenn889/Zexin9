@@ -344,13 +344,20 @@ function getAccountPreferredModels(
   );
   for (const acc of accounts) {
     const list = [...(acc.verifiedModels || []), ...(acc.detectedModels || [])];
+    let takenForAccount = 0;
     for (const m of list) {
       const clean = String(m || '').trim();
-      if (clean && !out.includes(clean)) out.push(clean);
+      if (!clean || out.includes(clean)) continue;
+      out.push(clean);
+      takenForAccount++;
+      // Spread the candidates across accounts: several API endpoints can be
+      // connected at once, and each one should contribute models — not only
+      // the first account that happens to have a long list.
+      if (takenForAccount >= 3) break;
     }
-    if (out.length >= 5) break;
+    if (out.length >= 9) break;
   }
-  return out.slice(0, 5);
+  return out.slice(0, 9);
 }
 
 /**
