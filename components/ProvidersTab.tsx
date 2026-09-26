@@ -168,6 +168,8 @@ export function ProvidersTab({
     dataDir?: string;
     cloudConfigured?: boolean;
     build?: string;
+    mongoEnvPresent?: boolean;
+    mongoUriValid?: boolean;
   } | null>(null);
   const [serverSaveError, setServerSaveError] = useState<string | null>(null);
   const [newAccProvider, setNewAccProvider] = useState<ProviderId>('custom');
@@ -1123,6 +1125,11 @@ export function ProvidersTab({
                 {serverSaveError ? (
                   <span className="px-2 py-1 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-300 break-words">
                     ⚠️ {serverSaveError}
+                  </span>
+                ) : serverPersistence && serverPersistence.mongoEnvPresent && serverPersistence.mongoUriValid === false ? (
+                  <span className="px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-300 break-words">
+                    ⚠️ Env MONGODB_URI terisi, tapi nilainya bukan URI MongoDB (harus diawali <code>mongodb+srv://</code>).
+                    Cek Environment Variables — mungkin ketuker dengan MONGODB_DB / Database Name.
                   </span>
                 ) : serverPersistence ? (
                   <span

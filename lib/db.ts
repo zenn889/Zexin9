@@ -240,16 +240,27 @@ function loadData() {
 // --- MongoDB Integration ---
 function getEffectiveMongoUri(): string | undefined {
   return (
-    process.env.MONGODB_URI ||
-    process.env.MONGODB_URL ||
+    cleanEnv(process.env.MONGODB_URI) ||
+    cleanEnv(process.env.MONGODB_URL) ||
     runtimeDbConfig.mongodbUri ||
     undefined
   );
 }
 
+/**
+ * Environment values pasted from hosting dashboards often carry stray quotes
+ * or whitespace — strip them so a valid value never fails on formatting.
+ */
+function cleanEnv(v?: string | null): string {
+  return String(v ?? '')
+    .trim()
+    .replace(/^["']+|["']+$/g, '')
+    .trim();
+}
+
 function getEffectiveMongoDbName(): string {
   return (
-    process.env.MONGODB_DB ||
+    cleanEnv(process.env.MONGODB_DB) ||
     runtimeDbConfig.mongodbDb ||
     'zexin9'
   );
@@ -278,7 +289,7 @@ async function getMongoDb(): Promise<Db | null> {
 // --- Supabase Integration ---
 function getEffectiveSupabaseUrl(): string | undefined {
   return (
-    process.env.SUPABASE_URL ||
+    cleanEnv(process.env.SUPABASE_URL) ||
     runtimeDbConfig.supabaseUrl ||
     undefined
   );
@@ -286,9 +297,9 @@ function getEffectiveSupabaseUrl(): string | undefined {
 
 function getEffectiveSupabaseKey(): string | undefined {
   return (
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
+    cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY) ||
+    cleanEnv(process.env.SUPABASE_KEY) ||
+    cleanEnv(process.env.SUPABASE_ANON_KEY) ||
     runtimeDbConfig.supabaseKey ||
     undefined
   );
@@ -324,7 +335,7 @@ function hasCloudEngineConfigured(): boolean {
   return (
     Boolean(getEffectiveMongoUri()) ||
     Boolean(getEffectiveSupabaseUrl()) ||
-    Boolean(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL)
+    Boolean(cleanEnv(process.env.KV_REST_API_URL) || cleanEnv(process.env.UPSTASH_REDIS_REST_URL))
   );
 }
 
@@ -423,7 +434,7 @@ async function persistToCloud(data: {
   }
 
   // 3. Upstash Redis (if configured)
-  const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const redisUrl = cleanEnv(process.env.KV_REST_API_URL) || cleanEnv(process.env.UPSTASH_REDIS_REST_URL) || undefined;
   const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
   if (redisUrl && redisToken) {
     try {
@@ -720,7 +731,7 @@ export const db = {
     }
 
     // 3. Try Upstash Redis / Vercel KV (REST)
-    const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const redisUrl = cleanEnv(process.env.KV_REST_API_URL) || cleanEnv(process.env.UPSTASH_REDIS_REST_URL) || undefined;
     const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
     if (redisUrl && redisToken) {
       try {
@@ -804,7 +815,7 @@ export const db = {
     const hasCloudEngine =
       Boolean(getEffectiveMongoUri()) ||
       Boolean(getEffectiveSupabaseUrl()) ||
-      Boolean(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL);
+      Boolean(cleanEnv(process.env.KV_REST_API_URL) || cleanEnv(process.env.UPSTASH_REDIS_REST_URL));
     if (!hasCloudEngine) return null;
 
     const now = Date.now();
@@ -858,9 +869,14 @@ export const db = {
    */
   getPersistenceSummary() {
     loadDbConfigFile();
-    const mongo = Boolean(getEffectiveMongoUri());
+    const mongoUri = getEffectiveMongoUri() || '';
+    const mongoEnvPresent = Boolean(mongoUri);
+    // A pasted value that is not a mongodb:// / mongodb+srv:// URI (e.g. the DB
+    // name was pasted into MONGODB_URI) must not light up as "connected".
+    const mongoUriValid = !mongoEnvPresent || /^mongodb(\+srv)?:\/\//i.test(mongoUri);
+    const mongo = mongoEnvPresent && mongoUriValid;
     const supabase = Boolean(getEffectiveSupabaseUrl());
-    const redis = Boolean(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL);
+    const redis = Boolean(cleanEnv(process.env.KV_REST_API_URL) || cleanEnv(process.env.UPSTASH_REDIS_REST_URL));
     const engine = mongo ? 'mongodb' : supabase ? 'supabase' : redis ? 'redis' : 'local';
     const dataDir = getDataDir();
     const serverlessEnv = Boolean(process.env.VERCEL || process.env.NETLIFY);
@@ -872,6 +888,8 @@ export const db = {
       dataDir,
       persistent,
       build: buildSha ? buildSha.slice(0, 7) : 'lokal/dev',
+      mongoEnvPresent,
+      mongoUriValid,
       accountsCount: memoryProviderAccounts.length,
       cfAccountsCount: memoryCfAccounts.length,
       keysCount: Object.values(memoryProviderKeys).filter((v) => String(v || '').trim().length > 0).length,
@@ -885,7 +903,7 @@ export const db = {
 
     const mongoUri = getEffectiveMongoUri();
     const supabaseUrl = getEffectiveSupabaseUrl();
-    const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const redisUrl = cleanEnv(process.env.KV_REST_API_URL) || cleanEnv(process.env.UPSTASH_REDIS_REST_URL) || undefined;
 
     let activeEngine: 'mongodb' | 'supabase' | 'redis' | 'local' = 'local';
     let mongoConnected = false;
