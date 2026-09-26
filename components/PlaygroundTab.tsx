@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   AlertCircle,
   Bot,
@@ -31,6 +31,15 @@ import {
   Zap,
 } from 'lucide-react';
 import { DEFAULT_FALLBACK_GROUPS, DEFAULT_PROVIDERS } from '@/lib/config';
+import { buildZip } from '@/lib/zip';
+import {
+  ArtifactFile,
+  ChatFilesPanel,
+  CodeFileCard,
+  FilePreviewModal,
+  extensionFor,
+  isPreviewable,
+} from './FileCards';
 
 interface PlaygroundTabProps {
   keys: Record<string, string>;
@@ -74,8 +83,28 @@ export interface ChatSession {
 const DEFAULT_WELCOME_MESSAGE: Message = {
   role: 'assistant',
   content:
-    '👋 **Zexin9 Gateway Online!**\n\nPilih model apa pun (misal `auto-smart` atau `deepseek-chat`), lampirkan file kode/dokumen jika diperlukan, dan kirim instruksi Anda. Semua riwayat sesi Anda tersimpan permanen dan tidak akan hilang!',
+    '👋 **Zexin9 Gateway Online!**\n\nPilih model apa pun (misal `auto-smart` atau `deepseek-chat`), lampirkan file kode/dokumen jika diperlukan, dan kirim instruksi Anda. Kalau jawabannya berisi file (kode, HTML, JSON, ...), hasilnya muncul sebagai kartu file — bisa **Download**, **Preview** (HTML/SVG), atau disimpan sekaligus sebagai **.zip**. Semua riwayat sesi Anda tersimpan permanen dan tidak akan hilang!',
 };
+
+// Helper: Trigger a browser download for a Blob
+function downloadBlob(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Helper: Download every generated file of a chat as one .zip
+function downloadFilesAsZip(files: ArtifactFile[]) {
+  if (!files.length) return;
+  const zip = buildZip(files.map((f) => ({ name: f.name, content: f.content })));
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  downloadBlob(`zexin9-files-${stamp}.zip`, new Blob([zip as unknown as BlobPart], { type: 'application/zip' }));
+}
 
 // Helper: Download code as a standalone file
 function downloadCodeFile(code: string, language: string, suggestedFilename?: string) {
@@ -198,6 +227,8 @@ export function PlaygroundTab({
   const [currentResponse, setCurrentResponse] = useState('');
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
   const [copiedMsgIdx, setCopiedMsgIdx] = useState<number | null>(null);
+  const [previewFile, setPreviewFile] = useState<ArtifactFile | null>(null);
+  const [showChatFiles, setShowChatFiles] = useState(false);
 
   // --- File Upload State ---
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
@@ -411,6 +442,47 @@ export function PlaygroundTab({
   const activeSession =
     sessions.find((s) => s.id === activeSessionId) || sessions[0];
   const messages = activeSession ? activeSession.messages : [DEFAULT_WELCOME_MESSAGE];
+
+  // --- Files produced by the model during this conversation (code fences).
+  // Drives the "N file di percakapan ini" bar, the per-file download and the
+  // "Download semua (.zip)" action — Claude-artifact style.
+  const chatFiles = useMemo<ArtifactFile[]>(() => {
+    const out: ArtifactFile[] = [];
+    const nameCount = new Map<string, number>();
+    messages.forEach((m) => {
+      if (m.role !== 'assistant') return;
+      parseMarkdownParts(m.content).forEach((part) => {
+        if (part.type !== 'code') return;
+        if (!part.content || !part.content.trim()) return;
+        const language = (part.language || 'code').toLowerCase();
+        let name =
+          (part.filename || '').trim() ||
+          `zexin9-file.${extensionFor(language)}`;
+        const seen = (nameCount.get(name) || 0) + 1;
+        nameCount.set(name, seen);
+        if (seen > 1) {
+          const dot = name.lastIndexOf('.');
+          name = dot > 0 ? `${name.slice(0, dot)}-${seen}${name.slice(dot)}` : `${name}-${seen}`;
+        }
+        out.push({ name, language: part.language || 'code', content: part.content });
+      });
+    });
+    return out;
+  }, [messages]);
+
+  const downloadArtifact = useCallback((file: ArtifactFile) => {
+    downloadCodeFile(file.content, file.language, file.name);
+  }, []);
+
+  // Esc closes the file preview.
+  useEffect(() => {
+    if (!previewFile) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreviewFile(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [previewFile]);
 
   useEffect(() => {
     scrollToBottom();
@@ -1306,62 +1378,30 @@ export function PlaygroundTab({
                           // Interactive Code Block with File Header & Download
                           const codeBlockId = `code-${index}-${pIdx}`;
                           const isCopied = copiedCodeId === codeBlockId;
-                          const displayFilename = part.filename || `file.${part.language || 'txt'}`;
+                          const displayFilename = part.filename || `file.${extensionFor(part.language || 'txt')}`;
 
                           return (
-                            <div
+                            <CodeFileCard
                               key={pIdx}
-                              className="rounded-xl overflow-hidden border border-white/[0.08] bg-black/60 shadow-lg my-2.5"
-                            >
-                              {/* File Header Bar */}
-                              <div className="flex items-center justify-between px-3.5 py-2 bg-black/80 border-b border-white/[0.06] text-xs font-mono">
-                                <div className="flex items-center space-x-2 text-cyan-300 font-semibold truncate">
-                                  <FileCode className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                                  <span className="truncate">{displayFilename}</span>
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-slate-400 uppercase font-medium">
-                                    {part.language || 'code'}
-                                  </span>
-                                </div>
-
-                                <div className="flex items-center space-x-1.5 shrink-0">
-                                  {/* Download File Button */}
-                                  <button
-                                    onClick={() =>
-                                      downloadCodeFile(part.content, part.language || 'txt', part.filename)
-                                    }
-                                    className="p-1 px-2 rounded-lg hover:bg-white/[0.06] text-slate-400 hover:text-emerald-300 transition flex items-center space-x-1 text-[11px]"
-                                    title="Download File ini ke Komputer"
-                                  >
-                                    <Download className="w-3.5 h-3.5 text-emerald-400" />
-                                    <span className="hidden sm:inline">Download</span>
-                                  </button>
-
-                                  {/* Copy Code Button */}
-                                  <button
-                                    onClick={() => copyCodeSegment(codeBlockId, part.content)}
-                                    className="p-1 px-2 rounded-lg hover:bg-white/[0.06] text-slate-400 hover:text-cyan-300 transition flex items-center space-x-1 text-[11px]"
-                                    title="Salin Kode"
-                                  >
-                                    {isCopied ? (
-                                      <>
-                                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                        <span className="text-emerald-400 font-bold">Tersalin</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Copy className="w-3.5 h-3.5" />
-                                        <span className="hidden sm:inline">Salin</span>
-                                      </>
-                                    )}
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Code Body */}
-                              <pre className="p-4 font-mono text-xs text-cyan-200 overflow-x-auto whitespace-pre leading-relaxed bg-[#060913]">
-                                {part.content}
-                              </pre>
-                            </div>
+                              filename={displayFilename}
+                              language={part.language || 'code'}
+                              content={part.content}
+                              copied={isCopied}
+                              onCopy={() => copyCodeSegment(codeBlockId, part.content)}
+                              onDownload={() =>
+                                downloadCodeFile(part.content, part.language || 'txt', part.filename)
+                              }
+                              onPreview={
+                                isPreviewable(part.language || '')
+                                  ? () =>
+                                      setPreviewFile({
+                                        name: displayFilename,
+                                        language: part.language || 'code',
+                                        content: part.content,
+                                      })
+                                  : undefined
+                              }
+                            />
                           );
                         })}
                       </div>
@@ -1464,6 +1504,16 @@ export function PlaygroundTab({
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Files produced in this conversation (Claude-artifact style) */}
+        <ChatFilesPanel
+          files={chatFiles}
+          expanded={showChatFiles}
+          onToggle={() => setShowChatFiles((v) => !v)}
+          onDownload={downloadArtifact}
+          onPreview={setPreviewFile}
+          onDownloadAll={() => downloadFilesAsZip(chatFiles)}
+        />
+
         {/* Input Form with File Attachments Preview & Upload Button */}
         <form
           onSubmit={(e) => {
@@ -1551,6 +1601,15 @@ export function PlaygroundTab({
             </button>
           </div>
         </form>
+
+        {/* Full-screen sandboxed preview for generated HTML/SVG files */}
+        {previewFile && (
+          <FilePreviewModal
+            file={previewFile}
+            onClose={() => setPreviewFile(null)}
+            onDownload={downloadArtifact}
+          />
+        )}
       </div>
     </div>
   );
