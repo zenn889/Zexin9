@@ -532,6 +532,9 @@ ROUTER_API_KEY=master_password_anda`;
                 <label className="block text-xs font-medium text-slate-300 mb-1">
                   MongoDB Connection URI
                 </label>
+                <p className="text-[10px] text-slate-500 mb-1.5">
+                  WAJIB. Seluruh teks dari Atlas (Connect → Drivers), sudah termasuk username &amp; password di dalamnya. Kalau kamu sudah mengisi env <code>MONGODB_URI</code> di hosting/menu .env, kolom ini boleh dikosongkan.
+                </p>
                 <div className="relative">
                   <input
                     type={showMongoUri ? 'text' : 'password'}
@@ -560,6 +563,9 @@ ROUTER_API_KEY=master_password_anda`;
                 <label className="block text-xs font-medium text-slate-300 mb-1">
                   Database Name
                 </label>
+                <p className="text-[10px] text-slate-500 mb-1.5">
+                  WAJIB juga — tapi hanya nama &quot;folder&quot; datanya saja (mis. zexin9). Ini BUKAN koneksi kedua; koneksinya ada di URI di atas. Kalau URI-mu sudah memuat /zexin9, tulis nama yang sama di sini.
+                </p>
                 <input
                   type="text"
                   value={mongoDbName}
