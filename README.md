@@ -131,6 +131,84 @@ claude
 
 ---
 
+## 🔑 Membuat API Key & Menyambungkan Aplikasi Lain (Bot WhatsApp, Hermes, dll)
+
+Zexin9 adalah **API yang kompatibel dengan OpenAI**. Aplikasi apa pun yang bisa diarahkan ke "Base URL + API Key" bisa memakainya — bot WhatsApp (Baileys, whatsapp-web.js, n8n, Make, Flowise, Chatwoot), Hermes Agent, Cursor, Cline, dan lain-lain.
+
+### 1) Buat API Key
+
+1. Buka dashboard → tab **Dashboard** → kartu **Client Bearer Tokens**.
+2. Tulis nama yang jelas (misal `Bot WA` atau `Hermes`) → klik **Issue Token**.
+3. Salin key-nya (format `sk-zx9-...`) — tombol copy ada di samping key. Key bisa dihapus kapan saja (tombol tempat sampah) tanpa memengaruhi key lain; jumlah request per key tampil di kartu itu.
+
+Kalau kamu memakai **master key** (`ROUTER_API_KEY` di env), key itu juga bisa dipakai di aplikasi lain. Tapi lebih baik buat key `sk-zx9-...` per aplikasi: bisa dicabut sendiri-sendiri dan pemakaiannya terlihat di dashboard.
+
+### 2) Nilai yang dipakai di aplikasi lain
+
+| Setting | Nilai |
+|---|---|
+| Base URL | `https://<domain-zexin9-kamu>/v1` |
+| API Key | `sk-zx9-...` dari tombol **Issue Token** |
+| Model | `auto-smart` (otomatis pilih provider yang sehat) atau model spesifik dari `GET /v1/models` |
+| Header | `Authorization: Bearer <api-key>` (format OpenAI) — atau `x-api-key: <api-key>` untuk format Anthropic di `/v1/messages` |
+
+### 3) Contoh per aplikasi
+
+**Bot WhatsApp (Baileys / whatsapp-web.js / n8n / Make / Flowise)**
+
+```env
+OPENAI_BASE_URL=https://<domain-zexin9-kamu>/v1
+OPENAI_API_KEY=sk-zx9-...
+OPENAI_MODEL=auto-smart
+```
+
+Di node OpenAI pada n8n / Make / Flowise: pilih provider **OpenAI**, isi Base URL + API Key di atas, lalu model `auto-smart`.
+
+**Hermes Agent**
+
+```bash
+# 1. Simpan key (jangan ditaruh di config.yaml)
+echo 'ZEXIN9_API_KEY=sk-zx9-...' >> ~/.hermes/.env
+
+# 2. Arahkan Hermes ke Zexin9
+hermes config set model.provider custom
+hermes config set model.base_url "https://<domain-zexin9-kamu>/v1"
+hermes config set model.api_key '${ZEXIN9_API_KEY}'
+hermes config set model.default auto-smart
+```
+
+Jalankan `hermes` seperti biasa. Mau tetap bisa berpindah-pindah provider? Tambahkan alias di `~/.hermes/config.yaml`:
+
+```yaml
+model_aliases:
+  zexin9:
+    model: auto-smart
+    provider: custom
+    base_url: "https://<domain-zexin9-kamu>/v1"
+    key_env: ZEXIN9_API_KEY
+```
+
+lalu pilih dengan `/model zexin9`.
+
+**Tes cepat (curl)**
+
+```bash
+curl https://<domain-zexin9-kamu>/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-zx9-..." \
+  -d '{"model":"auto-smart","messages":[{"role":"user","content":"halo"}]}'
+```
+
+**Cek daftar model yang tersedia** (termasuk model hasil deteksi akun custom / Cloudflare milikmu):
+
+```bash
+curl https://<domain-zexin9-kamu>/v1/models
+```
+
+Tab **Integrations** di dashboard juga memuat semua contoh ini siap-copy.
+
+---
+
 ## 🗄️ Menghubungkan Database (MongoDB / Supabase / Upstash)
 
 Tanpa database, akun & API key tersimpan di penyimpanan sementara server (di Vercel: **hilang setiap restart/redeploy**). Pilih salah satu opsi di bawah — semuanya ada paket gratis.

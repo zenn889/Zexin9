@@ -140,6 +140,65 @@ for chunk in response:
     content = chunk.choices[0].delta.content or ""
     print(content, end="", flush=True)`,
     },
+    whatsapp: {
+      title: 'Bot WhatsApp',
+      badge: 'Bot / No-code',
+      description:
+        'Arahkan bot WhatsApp (Baileys, whatsapp-web.js, n8n, Make, Flowise, Chatwoot) ke endpoint Zexin9 ini — cukup ganti Base URL dan API key.',
+      steps: [
+        'Buka tab Dashboard → kartu "Client Bearer Tokens" → buat API key (sk-zx9-...) dan salin',
+        'Di bot kamu set: OPENAI_BASE_URL = Base URL di bawah, OPENAI_API_KEY = API key tadi',
+        'Pilih model "auto-smart" (otomatis pakai provider yang sehat) atau model tertentu dari /v1/models',
+      ],
+      code: `# .env / pengaturan bot WhatsApp kamu
+OPENAI_BASE_URL=${effectiveBaseUrl}
+OPENAI_API_KEY=<API key sk-zx9-... dari tab Dashboard>
+OPENAI_MODEL=auto-smart
+
+# Contoh Node.js (SDK openai):
+# import OpenAI from "openai";
+# const client = new OpenAI({ baseURL: process.env.OPENAI_BASE_URL, apiKey: process.env.OPENAI_API_KEY });
+# const r = await client.chat.completions.create({
+#   model: process.env.OPENAI_MODEL,
+#   messages: [{ role: "user", content: pesanDariWhatsApp }],
+# });
+# await sock.sendMessage(jid, { text: r.choices[0].message.content });
+
+# n8n / Make / Flowise: pilih node "OpenAI" lalu set
+#   Base URL : ${effectiveBaseUrl}
+#   API Key  : sk-zx9-... (dari tab Dashboard)
+#   Model    : auto-smart`,
+    },
+    hermes: {
+      title: 'Hermes Agent',
+      badge: 'Agent',
+      description:
+        'Pakai Zexin9 sebagai provider OpenAI-compatible di Hermes Agent (CLI, desktop, Telegram/WhatsApp gateway).',
+      steps: [
+        'Buka tab Dashboard → kartu "Client Bearer Tokens" → buat API key (sk-zx9-...) dan salin',
+        'Simpan key di ~/.hermes/.env sebagai ZEXIN9_API_KEY=sk-zx9-...',
+        'Jalankan perintah hermes config set di bawah (sekali saja), lalu pilih model dengan /model auto-smart',
+      ],
+      code: `# ~/.hermes/.env
+ZEXIN9_API_KEY=sk-zx9-...
+
+# sekali saja di terminal:
+hermes config set model.provider custom
+hermes config set model.base_url "${effectiveBaseUrl}"
+hermes config set model.api_key '\${ZEXIN9_API_KEY}'
+hermes config set model.default auto-smart
+
+# cek:
+hermes config get model
+# lalu di sesi Hermes: /model auto-smart (atau model lain dari /v1/models)
+
+# Mau tetap bisa pindah-pindah? tambahkan alias:
+hermes config set model.aliases.zexin9.model auto-smart
+hermes config set model.aliases.zexin9.provider custom
+hermes config set model.aliases.zexin9.base_url "${effectiveBaseUrl}"
+hermes config set model.aliases.zexin9.key_env ZEXIN9_API_KEY
+# pakai dengan: /model zexin9`,
+    },
   };
 
   return (

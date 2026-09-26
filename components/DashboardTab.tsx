@@ -55,6 +55,7 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
   const [clientTokens, setClientTokens] = useState<ClientTokenItem[]>([]);
   const [newTokenName, setNewTokenName] = useState('');
   const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
+  const [origin, setOrigin] = useState('');
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [filterModel, setFilterModel] = useState('');
   const [live, setLive] = useState(true);
@@ -96,6 +97,7 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
   useEffect(() => {
     fetchLogsAndStats();
     fetchClientTokens();
+    if (typeof window !== 'undefined') setOrigin(window.location.origin);
   }, []);
 
   // Realtime auto-refresh: poll every 4s while this tab is open and visible.
@@ -521,6 +523,13 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
               Generate distinct Bearer keys for Cursor, Cline, Claude Code, or team members to track per-client usage.
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1.5 font-mono leading-relaxed break-all">
+              Pakai di aplikasi lain (bot WA, Hermes, IDE): Base URL{' '}
+              <span className="text-cyan-300">{origin}/v1</span> · Header{' '}
+              <span className="text-cyan-300">Authorization: Bearer &lt;token&gt;</span> · model{' '}
+              <span className="text-cyan-300">auto-smart</span> atau dari{' '}
+              <span className="text-cyan-300">{origin}/v1/models</span>
             </p>
           </div>
 

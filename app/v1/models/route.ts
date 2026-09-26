@@ -1,4 +1,5 @@
 import { DEFAULT_FALLBACK_GROUPS, DEFAULT_PROVIDERS } from '@/lib/config';
+import { db } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -49,6 +50,43 @@ export async function GET() {
         provider: provider.name,
       });
     }
+  }
+
+  // Models discovered on the user's own accounts (custom endpoints, Cloudflare
+  // Workers AI catalog, ...) so external clients (bot WA, Hermes, IDE plugins,
+  // n8n, ...) can list and pick what actually works on this gateway.
+  try {
+    await db.ensureCloudConfigLoaded();
+    const seen = new Set(models.map((m: any) => String(m.id)));
+
+    const addModels = (providerId: string, list?: string[]) => {
+      for (const raw of list || []) {
+        const id = String(raw || '').trim();
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        models.push({
+          id,
+          object: 'model',
+          created: 1700000000,
+          owned_by: providerId,
+          permission: [],
+          root: id,
+          parent: null,
+        });
+      }
+    };
+
+    for (const acc of db.getProviderAccounts()) {
+      if (acc.enabled === false) continue;
+      addModels(acc.provider, [...(acc.verifiedModels || []), ...(acc.detectedModels || [])]);
+    }
+    const settings = db.getProviderSettings();
+    for (const cf of settings.cfAccounts || []) {
+      if (cf.enabled === false) continue;
+      addModels('cloudflare', [...(cf.verifiedModels || []), ...(cf.detectedModels || [])]);
+    }
+  } catch {
+    // Best effort: a listing failure must never break the endpoint.
   }
 
   return new Response(
