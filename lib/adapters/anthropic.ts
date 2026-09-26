@@ -40,7 +40,7 @@ export async function callAnthropic(
 
   const body: any = {
     model: request.model,
-    max_tokens: request.max_tokens || 4096,
+    max_tokens: request.max_tokens || 8192,
     messages: anthropicMessages,
     stream: request.stream || false,
   };

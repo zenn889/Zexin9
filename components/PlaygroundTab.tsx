@@ -616,6 +616,7 @@ export function PlaygroundTab({
           model: selectedModel,
           messages: apiMessages,
           stream: true,
+          max_tokens: 8192,
         }),
       });
 

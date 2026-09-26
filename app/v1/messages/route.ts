@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       model,
       messages,
       temperature: body.temperature,
-      max_tokens: body.max_tokens || 4096,
+      max_tokens: body.max_tokens || 8192,
       stream: isStream,
     };
 
