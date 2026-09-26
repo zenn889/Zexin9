@@ -65,6 +65,9 @@ let cachedMongoClient: MongoClient | null = null;
 let cachedMongoDb: Db | null = null;
 let cachedSupabaseClient: SupabaseClient | null = null;
 
+// Timestamp of the last cloud pull (used to throttle realtime dashboard syncs)
+let lastCloudPullAt = 0;
+
 // Determine writable data directory location
 function getDataDir(): string {
   if (process.env.VERCEL || process.env.NETLIFY) {
@@ -663,7 +666,71 @@ export const db = {
       }
     }
 
-    // 3. Fallback to local
+    // 3. Try Upstash Redis / Vercel KV (REST)
+    const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (redisUrl && redisToken) {
+      try {
+        const res = await fetch(`${redisUrl}/get/9router_state`, {
+          headers: { Authorization: `Bearer ${redisToken}` },
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const payload = (await res.json().catch(() => null)) as { result?: unknown } | null;
+          let state: unknown = payload?.result ?? null;
+          // The write path stores a JSON-encoded string; unwrap up to 2 levels
+          // to tolerate both single- and double-encoded values.
+          for (let i = 0; i < 2 && typeof state === 'string'; i++) {
+            try {
+              state = JSON.parse(state as string);
+            } catch {
+              state = null;
+              break;
+            }
+          }
+          if (state && typeof state === 'object') {
+            const s = state as Record<string, unknown>;
+            if (Array.isArray(s.logs)) memoryLogs = s.logs as RequestLog[];
+            if (Array.isArray(s.tokens)) memoryTokens = decTokens(s.tokens as ClientToken[]);
+            if (typeof s.masterKey === 'string' && s.masterKey.trim().length > 0) {
+              memoryMasterKey = s.masterKey.trim();
+            }
+            if (s.providerKeys && typeof s.providerKeys === 'object') {
+              memoryProviderKeys = decKeysRecord(s.providerKeys as Record<string, string>);
+              setRuntimeStoredKeys(memoryProviderKeys);
+            }
+            if (s.providerBaseUrls && typeof s.providerBaseUrls === 'object') {
+              memoryProviderBaseUrls = decKeysRecord(s.providerBaseUrls as Record<string, string>);
+              setRuntimeStoredBaseUrls(memoryProviderBaseUrls);
+            }
+            if (typeof s.cfAccountId === 'string') {
+              memoryCfAccountId = s.cfAccountId;
+              setRuntimeCfAccountId(memoryCfAccountId);
+            }
+            if (Array.isArray(s.cfAccounts)) {
+              memoryCfAccounts = decCfAccounts(s.cfAccounts as CloudflareAccount[]);
+              setRuntimeCfAccounts(memoryCfAccounts);
+            }
+            if (Array.isArray(s.providerAccounts)) {
+              memoryProviderAccounts = decProviderAccounts(s.providerAccounts as ProviderAccount[]);
+              setRuntimeProviderAccounts(memoryProviderAccounts);
+            }
+            syncedSource = 'redis';
+            writeLocalCache();
+            return {
+              source: 'redis',
+              logsCount: memoryLogs.length,
+              tokensCount: memoryTokens.length,
+              masterKeyLoaded: Boolean(memoryMasterKey),
+            };
+          }
+        }
+      } catch {
+        // ignore redis read error
+      }
+    }
+
+    // 4. Fallback to local
     loadData();
     return {
       source: syncedSource,
@@ -671,6 +738,30 @@ export const db = {
       tokensCount: memoryTokens.length,
       masterKeyLoaded: Boolean(memoryMasterKey),
     };
+  },
+
+  /**
+   * Pulls fresh state from the configured cloud database when the last pull is
+   * older than ttlMs. Used by the dashboard's realtime polling so requests
+   * handled by other instances/regions show up within seconds. No-op when no
+   * cloud engine is configured (pure local mode).
+   */
+  async refreshFromCloudIfStale(ttlMs = 3000) {
+    const hasCloudEngine =
+      Boolean(getEffectiveMongoUri()) ||
+      Boolean(getEffectiveSupabaseUrl()) ||
+      Boolean(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL);
+    if (!hasCloudEngine) return null;
+
+    const now = Date.now();
+    if (now - lastCloudPullAt < ttlMs) return null;
+    lastCloudPullAt = now;
+
+    try {
+      return await this.syncFromCloud();
+    } catch {
+      return null;
+    }
   },
 
   // --- Database Connection Diagnostic ---

@@ -93,6 +93,10 @@ export interface ProviderAccount {
   createdAt?: string;
   lastUsedAt?: string;
   lastTested?: string;
+  /** Models discovered from the endpoint's /models listing (auto-detection). */
+  detectedModels?: string[];
+  /** ISO timestamp of the last successful model auto-detection. */
+  lastDetectedAt?: string;
   lastStatus?: 'ok' | 'rate_limited' | 'error';
   lastError?: string;
   latencyMs?: number;

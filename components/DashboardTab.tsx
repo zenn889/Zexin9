@@ -57,20 +57,27 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
   const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [filterModel, setFilterModel] = useState('');
+  const [live, setLive] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState('');
+  const [serverLogsCount, setServerLogsCount] = useState<number | null>(null);
 
   // Fetch real request logs and client tokens from database
-  const fetchLogsAndStats = async () => {
-    setIsLoadingLogs(true);
+  const fetchLogsAndStats = async (silent = false) => {
+    if (!silent) setIsLoadingLogs(true);
     try {
-      const res = await fetch('/api/logs?limit=50');
+      const res = await fetch('/api/logs?limit=200');
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.logs)) setLogs(data.logs);
+        if (typeof data?.stats?.totalRequests === 'number') {
+          setServerLogsCount(data.stats.totalRequests);
+        }
+        setLastUpdated(new Date().toLocaleTimeString());
       }
     } catch {
       // ignore
     } finally {
-      setIsLoadingLogs(false);
+      if (!silent) setIsLoadingLogs(false);
     }
   };
 
@@ -90,6 +97,20 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
     fetchLogsAndStats();
     fetchClientTokens();
   }, []);
+
+  // Realtime auto-refresh: poll every 4s while this tab is open and visible.
+  // Together with the server-side cloud pull (TTL-guarded) this also picks up
+  // requests served by other gateway instances that share the same database.
+  useEffect(() => {
+    if (!live) return;
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      fetchLogsAndStats(true);
+      fetchClientTokens();
+    }, 4000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live]);
 
   const handleCreateToken = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,16 +157,32 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
     setTimeout(() => setCopiedTokenId(null), 2000);
   };
 
+  // Period-scoped logs (the selector above now actually filters the view)
+  const periodStartMs = (() => {
+    if (period === 'today') {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      return d.getTime();
+    }
+    if (period === 'week') return Date.now() - 7 * 24 * 3600 * 1000;
+    if (period === 'month') return Date.now() - 30 * 24 * 3600 * 1000;
+    return 0;
+  })();
+  const periodLogs =
+    periodStartMs === 0
+      ? logs
+      : logs.filter((l) => new Date(l.timestamp).getTime() >= periodStartMs);
+
   // Real production metrics calculated from live request logs
-  const totalRequestsCount = logs.length;
-  const failoverCount = logs.filter((l) => l.fallbackCount > 0).length;
-  const totalTokensSaved = logs.reduce((acc, l) => acc + (l.tokensSaved || 0), 0);
+  const totalRequestsCount = periodLogs.length;
+  const failoverCount = periodLogs.filter((l) => l.fallbackCount > 0).length;
+  const totalTokensSaved = periodLogs.reduce((acc, l) => acc + (l.tokensSaved || 0), 0);
   const avgLatency =
-    logs.length > 0
-      ? Math.round(logs.reduce((acc, l) => acc + (l.latencyMs || 0), 0) / logs.length)
+    periodLogs.length > 0
+      ? Math.round(periodLogs.reduce((acc, l) => acc + (l.latencyMs || 0), 0) / periodLogs.length)
       : 0;
 
-  const filteredLogs = logs.filter((l) => {
+  const filteredLogs = periodLogs.filter((l) => {
     if (!filterModel) return true;
     return (
       l.requestedModel.toLowerCase().includes(filterModel.toLowerCase()) ||
@@ -185,7 +222,29 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
 
         <div className="flex items-center space-x-2">
           <button
-            onClick={fetchLogsAndStats}
+            onClick={() => setLive((v) => !v)}
+            className={`px-3 py-1.5 rounded-xl border transition flex items-center space-x-2 text-xs font-mono font-semibold active:scale-95 ${
+              live
+                ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+                : 'bg-white/[0.03] border-white/[0.08] text-slate-400'
+            }`}
+            title={live ? 'Pause auto-refresh' : 'Resume auto-refresh (every 4s)'}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${live ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}
+            />
+            <span>{live ? 'LIVE' : 'PAUSED'}</span>
+          </button>
+          {lastUpdated && (
+            <span
+              className="hidden sm:inline text-[10px] font-mono text-slate-500"
+              title={serverLogsCount !== null ? `Server: ${serverLogsCount} log tersimpan` : undefined}
+            >
+              {lastUpdated}
+            </span>
+          )}
+          <button
+            onClick={() => fetchLogsAndStats()}
             className="px-3.5 py-1.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] text-slate-300 hover:text-white border border-white/[0.08] transition flex items-center space-x-2 text-xs font-mono font-medium shadow-sm active:scale-95"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isLoadingLogs ? 'animate-spin' : ''}`} />

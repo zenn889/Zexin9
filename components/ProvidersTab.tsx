@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -149,6 +149,8 @@ export function ProvidersTab({
 
   // 9Router Universal Multi-Account Connections State
   const [providerAccounts, setProviderAccounts] = useState<ProviderAccount[]>([]);
+  const providerAccountsRef = useRef<ProviderAccount[]>([]);
+  const autoDetectRanRef = useRef(false);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [newAccProvider, setNewAccProvider] = useState<ProviderId>('deepseek');
   const [newAccName, setNewAccName] = useState('');
@@ -156,6 +158,9 @@ export function ProvidersTab({
   const [newAccAccountId, setNewAccAccountId] = useState('');
   const [newAccBaseUrl, setNewAccBaseUrl] = useState('');
   const [showNewAccKey, setShowNewAccKey] = useState(false);
+  const [formDetecting, setFormDetecting] = useState(false);
+  const [formDetectResult, setFormDetectResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [formDetectedModels, setFormDetectedModels] = useState<string[]>([]);
   const [selectedFilterProvider, setSelectedFilterProvider] = useState<string>('all');
   const [testingAccId, setTestingAccId] = useState<string | null>(null);
   const [accPingResults, setAccPingResults] = useState<
@@ -170,6 +175,33 @@ export function ProvidersTab({
   const [copiedEnv, setCopiedEnv] = useState(false);
   const [savingAllKeys, setSavingAllKeys] = useState(false);
   const [saveAllMsg, setSaveAllMsg] = useState<string | null>(null);
+
+  // Keep a ref copy of accounts so async ping/detect handlers always patch the
+  // latest list (avoids stale-closure overwrites when several updates overlap).
+  useEffect(() => {
+    providerAccountsRef.current = providerAccounts;
+  }, [providerAccounts]);
+
+  // One-time model auto-detection on load: for accounts that support an endpoint
+  // but have no detected model list yet, probe them silently so the dashboard
+  // (and Playground) fills itself without the user clicking anything.
+  useEffect(() => {
+    if (autoDetectRanRef.current) return;
+    const targets = providerAccounts.filter(
+      (a) =>
+        a.enabled !== false &&
+        (a.provider === 'custom' || a.baseUrl) &&
+        !(a.detectedModels && a.detectedModels.length > 0)
+    );
+    if (targets.length === 0) return;
+    autoDetectRanRef.current = true;
+    targets.slice(0, 3).forEach((acc, i) => {
+      setTimeout(() => {
+        void handleTestAccount(acc);
+      }, 800 + i * 700);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerAccounts]);
 
   useEffect(() => {
     // 1. Load from localStorage
@@ -356,6 +388,12 @@ export function ProvidersTab({
     }).catch(() => {});
   };
 
+  const updateAccount = (id: string, patch: Partial<ProviderAccount>) => {
+    const updated = providerAccountsRef.current.map((a) => (a.id === id ? { ...a, ...patch } : a));
+    providerAccountsRef.current = updated;
+    saveProviderAccountsLocalAndSync(updated);
+  };
+
   const handleAddAccount = () => {
     if (!newAccKey.trim()) return;
 
@@ -372,10 +410,22 @@ export function ProvidersTab({
       baseUrl: newAccBaseUrl.trim() || undefined,
       enabled: true,
       lastTested: new Date().toISOString(),
+      ...(formDetectedModels.length > 0
+        ? { detectedModels: formDetectedModels, lastDetectedAt: new Date().toISOString() }
+        : {}),
     };
 
     const updated = [...providerAccounts, newAcc];
+    providerAccountsRef.current = updated;
     saveProviderAccountsLocalAndSync(updated);
+
+    // Auto-detect models for custom endpoints right after connecting, so the
+    // dashboard fills itself instead of requiring a manual ping.
+    if (formDetectedModels.length === 0 && (newAcc.provider === 'custom' || newAcc.baseUrl)) {
+      setTimeout(() => {
+        void handleTestAccount(newAcc);
+      }, 400);
+    }
 
     // If single inputs were empty, populate for backward compatibility
     if (!keys[newAccProvider]) {
@@ -389,6 +439,8 @@ export function ProvidersTab({
     setNewAccKey('');
     setNewAccAccountId('');
     setNewAccBaseUrl('');
+    setFormDetectedModels([]);
+    setFormDetectResult(null);
     setIsAddingAccount(false);
   };
 
@@ -422,8 +474,29 @@ export function ProvidersTab({
         }),
       });
       const data = await res.json();
+      const found: string[] = Array.isArray(data?.modelsFound) ? data.modelsFound : [];
       if (data?.success && data?.model) {
-        rememberDiscoveredModel(acc.provider, data.model);
+        rememberDiscoveredModels(acc.provider, [data.model, ...found]);
+        const merged = Array.from(
+          new Set([...(acc.detectedModels || []), ...found, data.model].filter(Boolean))
+        );
+        updateAccount(acc.id, {
+          detectedModels: merged,
+          lastDetectedAt: new Date().toISOString(),
+          lastStatus: 'ok',
+          latencyMs: data.latency,
+        });
+        if (!selectedModels[acc.provider]) handleModelSelect(acc.provider, data.model);
+      } else if (found.length > 0) {
+        // Detection worked even if the chat ping failed — save what we found.
+        rememberDiscoveredModels(acc.provider, found);
+        const merged = Array.from(new Set([...(acc.detectedModels || []), ...found]));
+        updateAccount(acc.id, {
+          detectedModels: merged,
+          lastDetectedAt: new Date().toISOString(),
+          lastStatus: 'error',
+          lastError: String(data?.error || '').slice(0, 200),
+        });
       }
       setAccPingResults((prev) => ({
         ...prev,
@@ -509,20 +582,74 @@ export function ProvidersTab({
     });
   };
 
-  // Adds a model discovered from the endpoint's /models list to the custom-model
-  // chips for this provider, so the user can pick it later.
-  const rememberDiscoveredModel = (providerId: string, model: string) => {
-    if (!model) return;
+  // Adds models discovered from the endpoint's /models list to the custom-model
+  // chips for this provider, so the user can pick them later (Playground too).
+  const rememberDiscoveredModels = (providerId: string, models: string[]) => {
+    const cleaned = Array.from(
+      new Set((models || []).map((m) => String(m ?? '').trim()).filter((m) => m.length > 0))
+    );
+    if (cleaned.length === 0) return;
     setUserCustomModels((prev) => {
       const existing = prev[providerId] || [];
-      if (existing.includes(model)) return prev;
-      const updated = { ...prev, [providerId]: [...existing, model] };
+      const merged = [...existing];
+      cleaned.forEach((m) => {
+        if (!merged.includes(m)) merged.push(m);
+      });
+      if (merged.length === existing.length) return prev;
+      const updated = { ...prev, [providerId]: merged };
       if (typeof window !== 'undefined') {
         localStorage.setItem('zexin9_user_models', JSON.stringify(updated));
         localStorage.setItem('9router_user_models', JSON.stringify(updated));
       }
       return updated;
     });
+  };
+
+  const rememberDiscoveredModel = (providerId: string, model: string) => {
+    rememberDiscoveredModels(providerId, [model]);
+  };
+
+  // "Auto Deteksi" in the add-account form: probes the endpoint with the key and
+  // base URL currently typed in, then lists the models it reports.
+  const handleFormDetect = async () => {
+    if (!newAccKey.trim()) return;
+    setFormDetecting(true);
+    setFormDetectResult(null);
+    try {
+      const res = await fetch('/api/test-provider', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: newAccProvider,
+          apiKey: newAccKey.trim(),
+          baseUrl: newAccBaseUrl.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      const found: string[] = Array.isArray(data?.modelsFound) ? data.modelsFound : [];
+      if (found.length > 0) {
+        setFormDetectedModels(found);
+        rememberDiscoveredModels(newAccProvider, found);
+        if (!selectedModels[newAccProvider]) handleModelSelect(newAccProvider, found[0]);
+        setFormDetectResult({
+          ok: true,
+          text: `✓ ${found.length} model terdeteksi: ${found.slice(0, 8).join(', ')}${
+            found.length > 8 ? ` (+${found.length - 8} lagi)` : ''
+          }`,
+        });
+      } else if (data?.success) {
+        setFormDetectResult({ ok: true, text: `✓ Terhubung. Model aktif: ${data.model}` });
+      } else {
+        setFormDetectResult({
+          ok: false,
+          text: `✗ ${String(data?.error || 'Gagal mendeteksi model dari endpoint').slice(0, 220)}`,
+        });
+      }
+    } catch (err: any) {
+      setFormDetectResult({ ok: false, text: `✗ ${err?.message || 'Gagal terhubung'}` });
+    } finally {
+      setFormDetecting(false);
+    }
   };
 
   const handleAddCustomModel = (providerId: string) => {
@@ -632,10 +759,14 @@ export function ProvidersTab({
       });
 
       const data = await res.json();
-      if (providerId === 'custom' && data?.success && data?.model) {
-        rememberDiscoveredModel(providerId, data.model);
-        if (!modelToTest || modelToTest === data.model) {
-          handleModelSelect(providerId, data.model);
+      if (providerId === 'custom') {
+        const found: string[] = Array.isArray(data?.modelsFound) ? data.modelsFound : [];
+        if (found.length > 0) rememberDiscoveredModels(providerId, found);
+        if (data?.success && data?.model) {
+          rememberDiscoveredModels(providerId, [data.model]);
+          if (!modelToTest || modelToTest === data.model) {
+            handleModelSelect(providerId, data.model);
+          }
         }
       }
       setPingResults((prev) => ({
@@ -990,15 +1121,42 @@ export function ProvidersTab({
               {newAccProvider === 'custom' && (
                 <div className="sm:col-span-2">
                   <label className="text-[11px] font-semibold text-slate-400 block mb-1">
-                    Endpoint Base URL (Ollama / Localhost / vLLM)
+                    Endpoint Base URL (Ollama / Localhost / vLLM / API Reseller)
                   </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. http://localhost:11434/v1"
-                    value={newAccBaseUrl}
-                    onChange={(e) => setNewAccBaseUrl(e.target.value)}
-                    className="input-pro w-full"
-                  />
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. http://localhost:11434/v1"
+                      value={newAccBaseUrl}
+                      onChange={(e) => setNewAccBaseUrl(e.target.value)}
+                      className="input-pro w-full"
+                    />
+                    <button
+                      type="button"
+                      disabled={!newAccKey.trim() || formDetecting}
+                      onClick={handleFormDetect}
+                      className="shrink-0 px-3 py-2 rounded-xl text-[11px] font-mono border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 transition disabled:opacity-40 flex items-center space-x-1.5"
+                      title="Cek endpoint dan deteksi daftar model secara otomatis"
+                    >
+                      {formDetecting ? (
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3 h-3" />
+                      )}
+                      <span>{formDetecting ? 'Deteksi...' : 'Auto Deteksi'}</span>
+                    </button>
+                  </div>
+                  {formDetectResult && (
+                    <div
+                      className={`mt-1.5 text-[10px] font-mono p-1.5 rounded-lg border break-all ${
+                        formDetectResult.ok
+                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                          : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+                      }`}
+                    >
+                      {formDetectResult.text}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1124,6 +1282,22 @@ export function ProvidersTab({
                               <span className="text-slate-500">Account ID:</span>
                               <span className="truncate max-w-[140px] text-slate-300">
                                 {acc.accountId.slice(0, 6)}...{acc.accountId.slice(-4)}
+                              </span>
+                            </div>
+                          )}
+                          {acc.detectedModels && acc.detectedModels.length > 0 && (
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="text-slate-500 shrink-0">
+                                Model ({acc.detectedModels.length}):
+                              </span>
+                              <span
+                                className="text-emerald-300/90 text-right break-all"
+                                title={acc.detectedModels.join('\n')}
+                              >
+                                {acc.detectedModels.slice(0, 3).join(', ')}
+                                {acc.detectedModels.length > 3
+                                  ? ` +${acc.detectedModels.length - 3} lagi`
+                                  : ''}
                               </span>
                             </div>
                           )}

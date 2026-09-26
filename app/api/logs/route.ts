@@ -19,6 +19,14 @@ export async function GET(req: NextRequest) {
   const denied = requireAuth(req, CORS_HEADERS);
   if (denied) return denied;
 
+  // Realtime dashboard: refresh shared state from the configured cloud database
+  // (TTL-guarded, best effort) so logs written by other instances show up too.
+  try {
+    await db.refreshFromCloudIfStale(3000);
+  } catch {
+    // never fail log reads because of a sync hiccup
+  }
+
   const url = new URL(req.url);
   const limit = parseInt(url.searchParams.get('limit') || '100', 10);
 
