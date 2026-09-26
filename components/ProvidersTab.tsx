@@ -158,6 +158,18 @@ export function ProvidersTab({
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   // Which account card is currently having its provider changed inline.
   const [editingAccProviderId, setEditingAccProviderId] = useState<string | null>(null);
+  // Where the server actually stores accounts (engine + whether it survives a
+  // restart). Shown in the pool header so "accounts only exist in this browser"
+  // can never hide silently again.
+  const [serverPersistence, setServerPersistence] = useState<{
+    engine?: string;
+    persistent?: boolean;
+    accountsCount?: number;
+    dataDir?: string;
+    cloudConfigured?: boolean;
+    build?: string;
+  } | null>(null);
+  const [serverSaveError, setServerSaveError] = useState<string | null>(null);
   const [newAccProvider, setNewAccProvider] = useState<ProviderId>('custom');
   const [newAccName, setNewAccName] = useState('');
   const [newAccKey, setNewAccKey] = useState('');
@@ -281,9 +293,13 @@ export function ProvidersTab({
         if (Array.isArray(data.cfAccounts) && data.cfAccounts.length > 0) {
           setCfAccounts(data.cfAccounts);
         }
-        if (Array.isArray(data.providerAccounts) && data.providerAccounts.length > 0) {
+        if (Array.isArray(data.providerAccounts)) {
+          // The server list is the source of truth for routing — reflect it even
+          // when empty so the UI never shows accounts the server cannot use.
           setProviderAccounts(data.providerAccounts);
+          providerAccountsRef.current = data.providerAccounts;
         }
+        if (data.persistence) setServerPersistence(data.persistence);
       })
       .catch(() => {});
   }, []);
@@ -404,7 +420,34 @@ export function ProvidersTab({
         cfAccounts,
         providerAccounts: updated,
       }),
-    }).catch(() => {});
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          let detail = '';
+          try {
+            const errJson = await res.json();
+            detail = String(errJson?.error || errJson?.details || '').slice(0, 140);
+          } catch {
+            // no body
+          }
+          setServerSaveError(
+            `Gagal menyimpan ke server (HTTP ${res.status})${detail ? `: ${detail}` : ''}. Akun/API key hanya tersimpan di browser ini dan TIDAK dipakai server untuk chat — periksa Access Key dashboard atau koneksi database.`
+          );
+          return;
+        }
+        setServerSaveError(null);
+        try {
+          const data = await res.json();
+          if (data?.persistence) setServerPersistence(data.persistence);
+        } catch {
+          // no body
+        }
+      })
+      .catch((err) => {
+        setServerSaveError(
+          `Tidak bisa menghubungi server saat menyimpan (${err?.message || err}). Akun/API key hanya tersimpan di browser ini.`
+        );
+      });
   };
 
   const updateAccount = (id: string, patch: Partial<ProviderAccount>) => {
@@ -1046,6 +1089,34 @@ export function ProvidersTab({
               <p className="text-xs text-slate-400 mt-0.5">
                 Koneksikan banyak akun/API key untuk DeepSeek, Gemini, Groq, Cloudflare, OpenAI, dll. Rotasi beban otomatis (round-robin) & failover seketika jika ada akun yang limit (429) atau kehabisan saldo!
               </p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] font-mono">
+                {serverSaveError ? (
+                  <span className="px-2 py-1 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-300 break-words">
+                    ⚠️ {serverSaveError}
+                  </span>
+                ) : serverPersistence ? (
+                  <span
+                    className={`px-2 py-1 rounded-lg border break-words ${
+                      serverPersistence.persistent
+                        ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+                        : 'bg-amber-500/10 border-amber-500/25 text-amber-300'
+                    }`}
+                    title={
+                      serverPersistence.persistent
+                        ? 'Akun & API key yang tampil di sini benar-benar tersimpan di sisi server.'
+                        : 'Server ini menyimpan data di penyimpanan sementara — hubungkan database (env MONGODB_URI / SUPABASE_URL + SUPABASE_KEY / KV_REST_API_URL + KV_REST_API_TOKEN) agar akun tersimpan permanen.'
+                    }
+                  >
+                    💾 Tersimpan di SERVER: {serverPersistence.accountsCount ?? 0} akun · penyimpanan: {serverPersistence.engine}
+                    {serverPersistence.persistent
+                      ? serverPersistence.engine !== 'local'
+                        ? ' (database — permanen)'
+                        : ' (file lokal server)'
+                      : ' — SEMENTARA: data hilang saat server restart/redeploy. Hubungkan database dulu!'}
+                    {serverPersistence.build ? ` · versi server: ${serverPersistence.build}` : ''}
+                  </span>
+                ) : null}
+              </div>
             </div>
           </div>
 

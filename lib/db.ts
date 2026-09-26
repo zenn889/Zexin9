@@ -850,6 +850,35 @@ export const db = {
     }
   },
 
+  /**
+   * Lightweight persistence summary for the dashboard — no connection tests.
+   * Tells the UI where server-side state is stored, so users can see whether
+   * their accounts actually reached the server (and whether they survive a
+   * restart/redeploy: local storage on serverless = ephemeral /tmp).
+   */
+  getPersistenceSummary() {
+    loadDbConfigFile();
+    const mongo = Boolean(getEffectiveMongoUri());
+    const supabase = Boolean(getEffectiveSupabaseUrl());
+    const redis = Boolean(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL);
+    const engine = mongo ? 'mongodb' : supabase ? 'supabase' : redis ? 'redis' : 'local';
+    const dataDir = getDataDir();
+    const serverlessEnv = Boolean(process.env.VERCEL || process.env.NETLIFY);
+    const persistent = engine !== 'local' || !serverlessEnv;
+    const buildSha = (process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_COMMIT || '').trim();
+    return {
+      engine,
+      cloudConfigured: engine !== 'local',
+      dataDir,
+      persistent,
+      build: buildSha ? buildSha.slice(0, 7) : 'lokal/dev',
+      accountsCount: memoryProviderAccounts.length,
+      cfAccountsCount: memoryCfAccounts.length,
+      keysCount: Object.values(memoryProviderKeys).filter((v) => String(v || '').trim().length > 0).length,
+      configHydrated,
+    };
+  },
+
   // --- Database Connection Diagnostic ---
   async getDatabaseStatus() {
     loadDbConfigFile();

@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
         cfAccounts: settings.cfAccounts || [],
         providerAccounts: settings.providerAccounts || [],
         statusMap,
+        persistence: db.getPersistenceSummary(),
       },
       { headers: CORS_HEADERS }
     );
@@ -77,6 +78,7 @@ export async function POST(req: Request) {
         message: `Berhasil menyimpan konfigurasi dan ${updated.providerAccounts?.length || 0} akun multi-provider!`,
         activeCount,
         settings: updated,
+        persistence: db.getPersistenceSummary(),
       },
       { headers: CORS_HEADERS }
     );
