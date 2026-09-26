@@ -162,7 +162,12 @@ export async function callAnthropic(
   request: ChatCompletionRequest,
   signal?: AbortSignal
 ): Promise<Response> {
-  const url = `${baseUrl.replace(/\/+$/, '')}/v1/messages`;
+  const base = baseUrl.replace(/\/+$/, '');
+  const url = base.toLowerCase().endsWith('/v1/messages')
+    ? base
+    : base.toLowerCase().endsWith('/v1')
+      ? `${base}/messages`
+      : `${base}/v1/messages`;
   const { systemPrompt, anthropicMessages } = convertToAnthropicMessages(request.messages);
 
   const body: any = {

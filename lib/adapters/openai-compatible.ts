@@ -1,20 +1,65 @@
 import { ChatCompletionRequest } from '../types';
 
+function stripTrailingSlashes(url: string): string {
+  return (url || '').trim().replace(/\/+$/, '');
+}
+
+/** True when the URL points at a bare host with no path (e.g. "https://api.example.com"). */
+function hasBarePath(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname === '' || parsed.pathname === '/';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Builds the chat-completions URL from a base URL, tolerating the many shapes
+ * users paste for custom providers, resellers and local servers:
+ *   "https://host"                   -> "https://host/v1/chat/completions"
+ *   "https://host/v1"                -> "https://host/v1/chat/completions"
+ *   "https://host/v1/"               -> "https://host/v1/chat/completions"
+ *   "https://host/chat/completions"  -> unchanged
+ *   "https://host/api/openai"        -> "https://host/api/openai/chat/completions"
+ */
+export function buildChatCompletionsUrl(baseUrl: string): string {
+  const base = stripTrailingSlashes(baseUrl);
+  if (!base) return baseUrl;
+  if (base.toLowerCase().endsWith('/chat/completions')) return base;
+  return hasBarePath(base) ? `${base}/v1/chat/completions` : `${base}/chat/completions`;
+}
+
+/**
+ * Builds the models-list URL from the same base URL shapes (used for model
+ * auto-discovery in the provider test endpoint). A trailing
+ * "/chat/completions" is replaced by the models path.
+ */
+export function buildModelsUrl(baseUrl: string): string {
+  const base = stripTrailingSlashes(baseUrl).replace(/\/chat\/completions$/i, '');
+  if (!base) return baseUrl;
+  if (base.toLowerCase().endsWith('/models')) return base;
+  return hasBarePath(base) ? `${base}/v1/models` : `${base}/models`;
+}
+
 export async function callOpenAICompatible(
   endpoint: string,
   apiKey: string,
   request: ChatCompletionRequest,
   signal?: AbortSignal
 ): Promise<Response> {
-  const url = endpoint.endsWith('/chat/completions')
-    ? endpoint
-    : `${endpoint.replace(/\/+$/, '')}/chat/completions`;
+  const url = buildChatCompletionsUrl(endpoint);
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${apiKey.trim()}`,
     Accept: request.stream ? 'text/event-stream' : 'application/json',
   };
+
+  // Only send Authorization when a key is present — local servers / Ollama
+  // may reject an empty "Bearer " header.
+  if (apiKey && apiKey.trim()) {
+    headers.Authorization = `Bearer ${apiKey.trim()}`;
+  }
 
   // OpenRouter requires HTTP-Referer and X-Title headers
   if (endpoint.includes('openrouter.ai')) {

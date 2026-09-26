@@ -479,9 +479,10 @@ export async function executeProviderCall(
   provider: ProviderId,
   model: string,
   request: ChatCompletionRequest,
-  headerKeys: Record<string, string> = {}
+  headerKeys: Record<string, string> = {},
+  signal?: AbortSignal
 ): Promise<Response> {
-  const result = await executeProviderAccountPoolCall(provider, model, request, headerKeys);
+  const result = await executeProviderAccountPoolCall(provider, model, request, headerKeys, signal);
   return result.response;
 }
 

@@ -170,9 +170,10 @@ export async function callGemini(
   const isStream = Boolean(request.stream);
 
   const base = baseUrl.replace(/\/+$/, '');
+  const apiBase = base.toLowerCase().endsWith('/v1beta') ? base : `${base}/v1beta`;
   const url = isStream
-    ? `${base}/v1beta/models/${cleanModel}:streamGenerateContent?alt=sse&key=${apiKey}`
-    : `${base}/v1beta/models/${cleanModel}:generateContent?key=${apiKey}`;
+    ? `${apiBase}/models/${cleanModel}:streamGenerateContent?alt=sse&key=${apiKey}`
+    : `${apiBase}/models/${cleanModel}:generateContent?key=${apiKey}`;
 
   const body: any = {
     contents,

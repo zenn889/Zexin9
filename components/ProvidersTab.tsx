@@ -112,6 +112,18 @@ const PROVIDER_METADATA: Record<
   },
 };
 
+interface PingResult {
+  loading?: boolean;
+  success?: boolean;
+  latency?: number;
+  error?: string;
+  status?: number | string;
+  model?: string;
+  tried?: string[];
+  modelsFound?: string[];
+  hint?: string;
+}
+
 export function ProvidersTab({
   keys,
   setKeys,
@@ -132,7 +144,7 @@ export function ProvidersTab({
   const [isAddingCfAccount, setIsAddingCfAccount] = useState(false);
   const [testingAccountId, setTestingAccountId] = useState<string | null>(null);
   const [accountPingResults, setAccountPingResults] = useState<
-    Record<string, { loading?: boolean; success?: boolean; latency?: number; error?: string }>
+    Record<string, PingResult>
   >({});
 
   // 9Router Universal Multi-Account Connections State
@@ -147,19 +159,14 @@ export function ProvidersTab({
   const [selectedFilterProvider, setSelectedFilterProvider] = useState<string>('all');
   const [testingAccId, setTestingAccId] = useState<string | null>(null);
   const [accPingResults, setAccPingResults] = useState<
-    Record<string, { loading?: boolean; success?: boolean; latency?: number; error?: string }>
+    Record<string, PingResult>
   >({});
 
   const [selectedModels, setSelectedModels] = useState<Record<string, string>>({});
   const [customModelInputs, setCustomModelInputs] = useState<Record<string, string>>({});
   const [userCustomModels, setUserCustomModels] = useState<Record<string, string[]>>({});
   const [newModelInput, setNewModelInput] = useState<Record<string, string>>({});
-  const [pingResults, setPingResults] = useState<
-    Record<
-      string,
-      { loading?: boolean; success?: boolean; latency?: number; error?: string; status?: number | string }
-    >
-  >({});
+  const [pingResults, setPingResults] = useState<Record<string, PingResult>>({});
   const [copiedEnv, setCopiedEnv] = useState(false);
   const [savingAllKeys, setSavingAllKeys] = useState(false);
   const [saveAllMsg, setSaveAllMsg] = useState<string | null>(null);
@@ -415,6 +422,9 @@ export function ProvidersTab({
         }),
       });
       const data = await res.json();
+      if (data?.success && data?.model) {
+        rememberDiscoveredModel(acc.provider, data.model);
+      }
       setAccPingResults((prev) => ({
         ...prev,
         [acc.id]: {
@@ -422,6 +432,11 @@ export function ProvidersTab({
           success: data.success,
           latency: data.latency,
           error: data.error,
+          status: data.status,
+          model: data.model,
+          tried: data.tried,
+          modelsFound: data.modelsFound,
+          hint: data.hint,
         },
       }));
     } catch (err: any) {
@@ -489,6 +504,22 @@ export function ProvidersTab({
       if (typeof window !== 'undefined') {
         localStorage.setItem('zexin9_custom_models', JSON.stringify(updated));
         localStorage.setItem('9router_custom_models', JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
+
+  // Adds a model discovered from the endpoint's /models list to the custom-model
+  // chips for this provider, so the user can pick it later.
+  const rememberDiscoveredModel = (providerId: string, model: string) => {
+    if (!model) return;
+    setUserCustomModels((prev) => {
+      const existing = prev[providerId] || [];
+      if (existing.includes(model)) return prev;
+      const updated = { ...prev, [providerId]: [...existing, model] };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('zexin9_user_models', JSON.stringify(updated));
+        localStorage.setItem('9router_user_models', JSON.stringify(updated));
       }
       return updated;
     });
@@ -567,6 +598,12 @@ export function ProvidersTab({
 
   const getEffectiveModel = (providerId: string) => {
     const sel = selectedModels[providerId];
+    if (providerId === 'custom') {
+      // Never fall back to the Ollama-style default list for custom providers —
+      // leave it empty so the server auto-detects a model from /models.
+      if (sel && sel !== 'custom') return sel;
+      return customModelInputs[providerId] || '';
+    }
     if (sel === 'custom') {
       return customModelInputs[providerId] || '';
     }
@@ -595,6 +632,12 @@ export function ProvidersTab({
       });
 
       const data = await res.json();
+      if (providerId === 'custom' && data?.success && data?.model) {
+        rememberDiscoveredModel(providerId, data.model);
+        if (!modelToTest || modelToTest === data.model) {
+          handleModelSelect(providerId, data.model);
+        }
+      }
       setPingResults((prev) => ({
         ...prev,
         [providerId]: {
@@ -603,6 +646,10 @@ export function ProvidersTab({
           latency: data.latency,
           error: data.error,
           status: data.status,
+          model: data.model,
+          tried: data.tried,
+          modelsFound: data.modelsFound,
+          hint: data.hint,
         },
       }));
     } catch (err: any) {
@@ -1087,17 +1134,28 @@ export function ProvidersTab({
                       <div className="pt-2 border-t border-white/[0.06]">
                         {ping && (
                           <div
-                            className={`mb-2 text-[10px] font-mono p-1 rounded-lg border flex items-center justify-between ${
+                            className={`mb-2 text-[10px] font-mono p-1.5 rounded-lg border ${
                               ping.success
                                 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
                                 : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
                             }`}
                           >
-                            <span className="truncate max-w-[190px]">
+                            <div className="break-all whitespace-pre-wrap">
                               {ping.success
-                                ? `✓ Siap (${ping.latency}ms)`
-                                : `✗ ${ping.error?.slice(0, 30) || 'Error'}`}
-                            </span>
+                                ? `✓ Siap (${ping.latency}ms)${ping.model ? ` · ${ping.model}` : ''}`
+                                : `✗ ${ping.error?.slice(0, 200) || 'Error'}`}
+                            </div>
+                            {!ping.success && (ping.modelsFound?.length || 0) > 0 && (
+                              <div className="mt-0.5 text-amber-300/90 break-all">
+                                Model tersedia: {ping.modelsFound!.slice(0, 5).join(', ')}
+                                {ping.modelsFound!.length > 5
+                                  ? ` (+${ping.modelsFound!.length - 5} lagi)`
+                                  : ''}
+                              </div>
+                            )}
+                            {!ping.success && ping.hint && (
+                              <div className="mt-0.5 text-slate-400 break-words">{ping.hint}</div>
+                            )}
                           </div>
                         )}
 
@@ -1626,17 +1684,19 @@ export function ProvidersTab({
 
                       {/* Ping Footer */}
                       <div className="flex items-center justify-between pt-2 border-t border-white/[0.06] text-xs">
-                        <div className="font-mono text-[11px]">
+                        <div className="font-mono text-[11px] min-w-0 flex-1 mr-2">
                           {ping?.loading && (
                             <span className="text-cyan-400 flex items-center space-x-1">
                               <RefreshCw className="w-3 h-3 animate-spin" />
-                              <span>Testing {activeModel}...</span>
+                              <span>Testing {activeModel || 'model (auto-detect)'}...</span>
                             </span>
                           )}
                           {ping && !ping.loading && ping.success && (
                             <span className="text-emerald-400 font-semibold flex items-center space-x-1">
                               <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>{ping.latency}ms OK</span>
+                              <span>
+                                {ping.latency}ms OK{ping.model ? ` · ${ping.model}` : ''}
+                              </span>
                             </span>
                           )}
                           {ping && !ping.loading && !ping.success && (
@@ -1645,11 +1705,22 @@ export function ProvidersTab({
                               <span>Failed ({ping.status || 'Err'})</span>
                             </span>
                           )}
+                          {ping && !ping.loading && !ping.success && (ping.modelsFound?.length || 0) > 0 && (
+                            <div className="mt-1 text-[10px] text-amber-300/90 break-all">
+                              Model tersedia: {ping.modelsFound!.slice(0, 5).join(', ')}
+                              {ping.modelsFound!.length > 5
+                                ? ` (+${ping.modelsFound!.length - 5} lagi)`
+                                : ''}
+                            </div>
+                          )}
+                          {ping && !ping.loading && !ping.success && ping.hint && (
+                            <div className="mt-0.5 text-[10px] text-slate-400 break-words">{ping.hint}</div>
+                          )}
                         </div>
 
                         <button
                           onClick={() => testProviderPing(provider.id)}
-                          disabled={ping?.loading || !hasKey}
+                          disabled={ping?.loading || (!hasKey && provider.id !== 'custom')}
                           className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-40 text-xs font-medium text-slate-200 border border-white/[0.08] transition active:scale-95"
                         >
                           <Play className="w-3 h-3 text-cyan-400 fill-current" />
