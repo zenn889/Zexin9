@@ -21,6 +21,9 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
 
   try {
+    // Cold instances read the account list from the cloud database first.
+    await db.ensureCloudConfigLoaded();
+
     const settings = db.getProviderSettings();
 
     // Map which providers are configured in server DB or process.env

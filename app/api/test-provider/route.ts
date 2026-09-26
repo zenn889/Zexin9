@@ -1,4 +1,5 @@
 import { executeProviderCall } from '@/lib/router';
+import { db } from '@/lib/db';
 import { ChatCompletionRequest, ProviderId } from '@/lib/types';
 import { requireAuth } from '@/lib/auth';
 import { getProviderApiKey, getProviderBaseUrl, getEffectiveProviderAccounts } from '@/lib/config';
@@ -145,6 +146,9 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
 
   try {
+    // Cold instances read the account list from the cloud database first.
+    await db.ensureCloudConfigLoaded();
+
     const { provider, apiKey, baseUrl, accountId, model } = await req.json();
 
     if (!provider) {

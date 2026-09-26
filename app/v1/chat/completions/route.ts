@@ -24,6 +24,12 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now();
 
   try {
+    // 0. Cold serverless instances start with an empty local store — hydrate the
+    //    configuration (provider accounts, keys, master key) from the cloud
+    //    database before auth/routing, otherwise every provider is skipped with
+    //    "Belum ada akun/key" until someone opens the dashboard on this instance.
+    await db.ensureCloudConfigLoaded();
+
     // 1. Gateway Authentication Check (via master key, client token, or web session cookie)
     const authHeader = req.headers.get('authorization') || '';
     const xApiKey = req.headers.get('x-api-key') || '';

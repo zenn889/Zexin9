@@ -68,6 +68,12 @@ let cachedSupabaseClient: SupabaseClient | null = null;
 // Timestamp of the last cloud pull (used to throttle realtime dashboard syncs)
 let lastCloudPullAt = 0;
 
+// False until this instance has loaded the provider configuration from the local
+// store or the cloud database. Cold serverless instances start empty; without
+// this flag their first persist would overwrite the cloud-stored accounts with
+// an empty list (the "all providers: Belum ada akun/key" bug).
+let configHydrated = false;
+
 // Determine writable data directory location
 function getDataDir(): string {
   if (process.env.VERCEL || process.env.NETLIFY) {
@@ -217,6 +223,13 @@ function loadData() {
         memoryProviderAccounts = [];
       }
       setRuntimeProviderAccounts(memoryProviderAccounts);
+
+      const hadStoredConfig =
+        memoryProviderAccounts.length > 0 ||
+        memoryCfAccounts.length > 0 ||
+        Object.values(memoryProviderKeys).some((v) => String(v || '').trim().length > 0) ||
+        Object.values(memoryProviderBaseUrls).some((v) => String(v || '').trim().length > 0);
+      if (hadStoredConfig) configHydrated = true;
     }
   } catch {
 
@@ -307,6 +320,14 @@ function getSupabaseClient(): SupabaseClient | null {
 }
 
 // --- Background Data Persistence ---
+function hasCloudEngineConfigured(): boolean {
+  return (
+    Boolean(getEffectiveMongoUri()) ||
+    Boolean(getEffectiveSupabaseUrl()) ||
+    Boolean(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL)
+  );
+}
+
 async function persistToCloud(data: {
   logs: RequestLog[];
   tokens: ClientToken[];
@@ -317,6 +338,36 @@ async function persistToCloud(data: {
   cfAccounts: CloudflareAccount[];
   providerAccounts: ProviderAccount[];
 }) {
+  // Cold-start guard: an instance that has not hydrated its configuration yet
+  // must not erase cloud-stored accounts/keys with its empty in-memory view.
+  // Hydrate from the cloud first and prefer whatever it holds.
+  if (!configHydrated && hasCloudEngineConfigured()) {
+    try {
+      await db.syncFromCloud();
+      if (memoryProviderAccounts.length > 0) {
+        data.providerAccounts = encProviderAccounts(memoryProviderAccounts);
+      }
+      if (memoryCfAccounts.length > 0) {
+        data.cfAccounts = encCfAccounts(memoryCfAccounts);
+      }
+      if (Object.keys(memoryProviderKeys).length > 0) {
+        data.providerKeys = encKeysRecord(memoryProviderKeys);
+      }
+      if (Object.keys(memoryProviderBaseUrls).length > 0) {
+        data.providerBaseUrls = encKeysRecord(memoryProviderBaseUrls);
+      }
+      if (Array.isArray(memoryLogs) && memoryLogs.length > 0) {
+        const byId = new Map<string, RequestLog>();
+        for (const l of [...(data.logs || []), ...memoryLogs]) byId.set(l.id, l);
+        data.logs = Array.from(byId.values()).slice(0, 500);
+      }
+    } catch {
+      // Hydration failed (network hiccup): skip this persist entirely instead of
+      // risking a wipe of cloud-stored config with our empty view. Next persist retries.
+      return;
+    }
+  }
+
   // 1. MongoDB
   const mongoUri = getEffectiveMongoUri();
   if (mongoUri) {
@@ -599,6 +650,7 @@ export const db = {
               setRuntimeProviderAccounts(memoryProviderAccounts);
             }
             syncedSource = 'mongodb';
+            configHydrated = true;
             // update local cache file
             writeLocalCache();
             return {
@@ -653,6 +705,7 @@ export const db = {
             setRuntimeProviderAccounts(memoryProviderAccounts);
           }
           syncedSource = 'supabase';
+          configHydrated = true;
           writeLocalCache();
           return {
             source: 'supabase',
@@ -716,6 +769,7 @@ export const db = {
               setRuntimeProviderAccounts(memoryProviderAccounts);
             }
             syncedSource = 'redis';
+            configHydrated = true;
             writeLocalCache();
             return {
               source: 'redis',
@@ -755,6 +809,38 @@ export const db = {
 
     const now = Date.now();
     if (now - lastCloudPullAt < ttlMs) return null;
+    lastCloudPullAt = now;
+
+    try {
+      return await this.syncFromCloud();
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Serverless cold-start guard: a fresh instance has an empty local store while
+   * the real configuration (provider accounts / keys) lives in the cloud
+   * database. Pull it once before routing or provider tests so a new instance
+   * doesn't report "Belum ada akun/key" for every provider on the first
+   * request. No-op when any local config exists or no cloud engine is set.
+   */
+  async ensureCloudConfigLoaded() {
+    const hasCloudEngine = hasCloudEngineConfigured();
+    if (!hasCloudEngine) return null;
+
+    // Note: memoryMasterKey is seeded from the ROUTER_API_KEY/GATEWAY_SECRET env at
+    // module load, so it must NOT count as "local config exists" — otherwise this
+    // guard would never fire on deployments that (correctly) set a router key.
+    const hasLocalConfig =
+      memoryProviderAccounts.length > 0 ||
+      memoryCfAccounts.length > 0 ||
+      Object.values(memoryProviderKeys).some((v) => (v || '').trim().length > 0) ||
+      Object.values(memoryProviderBaseUrls).some((v) => (v || '').trim().length > 0);
+    if (hasLocalConfig) return null;
+
+    const now = Date.now();
+    if (now - lastCloudPullAt < 5000) return null;
     lastCloudPullAt = now;
 
     try {
@@ -1006,6 +1092,8 @@ export const db = {
       setRuntimeCfAccountId(memoryCfAccountId);
     }
 
+    // A dashboard save is authoritative — this instance now knows its config.
+    configHydrated = true;
     persistData();
   },
 
@@ -1022,6 +1110,7 @@ export const db = {
         (acc) => acc && typeof acc.provider === 'string' && typeof acc.apiKey === 'string'
       );
       setRuntimeProviderAccounts(memoryProviderAccounts);
+      configHydrated = true;
       persistData();
     }
   },

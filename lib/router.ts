@@ -659,13 +659,17 @@ export async function routeChatCompletion(
   }
 
   // If all providers failed or none configured
+  const allSkipped =
+    failureLogs.length > 0 && failureLogs.every((l) => l.includes('Dilewati'));
   const errorPayload = {
     error: {
       message: 'Semua provider dalam fallback pool gagal memproses request.',
       type: 'router_fallback_exhausted',
       requested_model: rawRequest.model,
       failure_chain: failureLogs,
-      hint: 'Pastikan API key provider sudah diisi dan disimpan di menu "Provider Tiers" atau di file .env / Cloud Database.',
+      hint: allSkipped
+        ? 'Semua kandidat dilewati karena instance ini tidak menemukan akun/key provider. Jika akun sudah ditambahkan lewat dashboard: buka dashboard sekali supaya konfigurasi tersinkron dari database, dan pastikan env database cloud terpasang di deployment (MONGODB_URI / SUPABASE_URL + SUPABASE_KEY / KV_REST_API_URL + KV_REST_API_TOKEN). Instance serverless yang baru start menarik konfigurasi dari database saat request pertama masuk.'
+        : 'Pastikan API key provider sudah diisi dan disimpan di menu "Provider Tiers" atau di file .env / Cloud Database.',
     },
   };
 
