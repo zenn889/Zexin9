@@ -327,6 +327,39 @@ export function ProvidersTab({
     }).catch(() => {});
   };
 
+  // Akun Cloudflare dulu punya daftar sendiri (zexin9_cf_accounts) plus form
+  // "Tambah Akun" kedua di kartu Cloudflare. Sekarang SEMUA akun tinggal di satu
+  // daftar (providerAccounts, provider='cloudflare') supaya cuma ada satu tempat
+  // menambah/mengetes. Migrasi sekali jalan, lalu daftar lama dikosongkan.
+  useEffect(() => {
+    if (cfAccounts.length === 0) return;
+    const migrated: ProviderAccount[] = cfAccounts.map((cf) => ({
+      id: cf.id,
+      provider: 'cloudflare' as ProviderId,
+      name: cf.name || 'Akun Cloudflare',
+      apiKey: cf.apiToken,
+      accountId: cf.accountId,
+      enabled: cf.enabled !== false,
+      createdAt: cf.createdAt,
+      lastUsedAt: cf.lastUsedAt,
+      ...(Array.isArray(cf.detectedModels) ? { detectedModels: cf.detectedModels.map(String) } : {}),
+      ...(Array.isArray(cf.verifiedModels) ? { verifiedModels: cf.verifiedModels.map(String) } : {}),
+    }));
+    const merged = [
+      ...providerAccountsRef.current,
+      ...migrated.filter(
+        (m) =>
+          !providerAccountsRef.current.some(
+            (a) => a.id === m.id || (a.accountId && m.accountId && a.accountId === m.accountId)
+          )
+      ),
+    ];
+    providerAccountsRef.current = merged;
+    saveProviderAccountsLocalAndSync(merged);
+    saveCfAccountsLocalAndSync([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfAccounts.length]);
+
   const handleAddCfAccount = () => {
     if (!newAccountId.trim() || !newAccountToken.trim()) return;
 
@@ -1803,230 +1836,38 @@ export function ProvidersTab({
                         )}
                       </div>
 
-                      {/* Cloudflare Multi-Account Pool Manager */}
+                      {/* Info pool Cloudflare — akunnya SAMA dengan daftar di atas */}
                       {provider.id === 'cloudflare' && (
-                        <div className="p-3.5 rounded-xl bg-black/40 border border-amber-500/20 space-y-3 mt-1">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                              <div className="p-1 rounded-lg bg-amber-500/10 text-amber-400">
-                                <Layers className="w-4 h-4" />
-                              </div>
-                              <div>
-                                <span className="text-xs font-bold text-white block">
-                                  Multi-Account Cloudflare Pool
-                                </span>
-                                <span className="text-[10px] text-amber-300 font-mono">
-                                  {cfAccounts.filter((a) => a.enabled !== false).length} Akun Aktif •{' '}
-                                  {(
-                                    cfAccounts.filter((a) => a.enabled !== false).length * 10000
-                                  ).toLocaleString()}{' '}
-                                  Neurons Gratis/Hari
-                                </span>
-                              </div>
+                        <div className="p-3 rounded-xl bg-black/40 border border-amber-500/20 space-y-2.5">
+                          <div className="flex items-center space-x-2">
+                            <span className="p-1 rounded-lg bg-amber-500/10 text-amber-400">
+                              <Layers className="w-4 h-4" />
+                            </span>
+                            <div>
+                              <span className="text-xs font-bold text-white block">
+                                Cloudflare Pool —{' '}
+                                {tierAccounts.filter((a) => a.enabled !== false).length} akun aktif
+                              </span>
+                              <span className="text-[10px] text-amber-300 font-mono">
+                                {(
+                                  tierAccounts.filter((a) => a.enabled !== false).length * 10000
+                                ).toLocaleString()}{' '}
+                                Neurons Gratis/Hari • rotasi + failover otomatis
+                              </span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => setIsAddingCfAccount(!isAddingCfAccount)}
-                              className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 flex items-center space-x-1 transition"
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span>Tambah Akun</span>
-                            </button>
                           </div>
-
                           <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-200/90 leading-relaxed">
-                            💡 <strong>Auto-Failover Kuota:</strong> Setiap akun Cloudflare dapat 10.000 neuron gratis per hari. Sambungkan beberapa akun Cloudflare kamu di sini — Zexin9 akan otomatis merotasi (round-robin) dan beralih otomatis ke akun berikutnya jika suatu akun terkena limit 429 atau kuotanya habis!
+                            💡 Akun Cloudflare ditambahkan lewat tombol <strong>Tambah Akun</strong> di blok
+                            "🔑 Key &amp; endpoint per akun" di atas (isi API Token + Cloudflare Account ID di
+                            situ) — dan tiap akun bisa dites sendiri lewat tombol <strong>Tes</strong>. Zexin9
+                            merotasi akun (round-robin) dan pindah otomatis kalau satu akun kena limit 429 atau
+                            kuota hariannya habis.
                           </div>
 
-                          {/* Accounts List */}
-                          <div className="space-y-2">
-                            {cfAccounts.length === 0 ? (
-                              <div className="text-center py-2.5 text-xs text-slate-500 border border-dashed border-white/[0.08] rounded-xl">
-                                Belum ada akun terdaftar di pool. Klik <strong>Tambah Akun</strong> di atas untuk menyambungkan akun Cloudflare pertamamu!
-                              </div>
-                            ) : (
-                              cfAccounts.map((acc, idx) => {
-                                const isEnabled = acc.enabled !== false;
-                                const ping = accountPingResults[acc.id];
-                                return (
-                                  <div
-                                    key={acc.id}
-                                    className={`p-2.5 rounded-xl border transition ${
-                                      isEnabled
-                                        ? 'bg-black/30 border-white/[0.08]'
-                                        : 'bg-black/10 border-white/[0.04] opacity-60'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between mb-1.5">
-                                      <div className="flex items-center space-x-2">
-                                        <span
-                                          className={`w-2 h-2 rounded-full ${
-                                            isEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
-                                          }`}
-                                        />
-                                        <span className="text-xs font-semibold text-slate-200">
-                                          {acc.name || `Akun #${idx + 1}`}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center space-x-1.5">
-                                        {/* Ping Test Button */}
-                                        <button
-                                          type="button"
-                                          disabled={ping?.loading}
-                                          onClick={() => handleTestCfAccount(acc)}
-                                          className="px-2 py-0.5 text-[10px] font-mono rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-cyan-300 border border-white/[0.08] flex items-center space-x-1 transition disabled:opacity-50"
-                                        >
-                                          {ping?.loading ? (
-                                            <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                                          ) : (
-                                            <Play className="w-2.5 h-2.5" />
-                                          )}
-                                          <span>Test Ping</span>
-                                        </button>
-
-                                        {/* Toggle Active */}
-                                        <button
-                                          type="button"
-                                          onClick={() => handleToggleCfAccount(acc.id)}
-                                          className={`px-2 py-0.5 text-[10px] font-mono rounded-lg border transition ${
-                                            isEnabled
-                                              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20 font-medium'
-                                              : 'bg-white/[0.04] text-slate-400 border-white/[0.06]'
-                                          }`}
-                                        >
-                                          {isEnabled ? 'Aktif' : 'Nonaktif'}
-                                        </button>
-
-                                        {/* Delete */}
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDeleteCfAccount(acc.id)}
-                                          className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition"
-                                          title="Hapus akun dari pool"
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {/* Account ID & Token preview */}
-                                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
-                                      <span className="truncate max-w-[180px]">
-                                        ID: {acc.accountId ? `${acc.accountId.slice(0, 6)}...${acc.accountId.slice(-4)}` : 'none'}
-                                      </span>
-                                      <span className="truncate max-w-[120px]">
-                                        Token: ••••••••{acc.apiToken ? acc.apiToken.slice(-4) : ''}
-                                      </span>
-                                    </div>
-
-                                    {/* Ping Result Banner */}
-                                    {ping && (
-                                      <div
-                                        className={`mt-2 text-[10px] font-mono p-1.5 rounded-lg border flex items-center justify-between ${
-                                          ping.success
-                                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                                            : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
-                                        }`}
-                                      >
-                                        <span>
-                                          {ping.success
-                                            ? `✓ Terkoneksi (${ping.latency}ms) - Kuota Siap`
-                                            : `✗ Error: ${ping.error || 'Gagal terhubung'}`}
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
-
-                          {/* Add Account Inline Form */}
-                          {isAddingCfAccount && (
-                            <div className="p-3 rounded-xl bg-black/50 border border-amber-500/30 space-y-2.5 mt-2 animate-in fade-in">
-                              <div className="text-xs font-bold text-white flex items-center justify-between">
-                                <span>+ Tambah Akun Cloudflare Baru</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setIsAddingCfAccount(false)}
-                                  className="text-slate-400 hover:text-white text-xs"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-
-                              <div>
-                                <label className="text-[10px] font-semibold text-slate-400 block mb-0.5">
-                                  Label / Nama Akun (Opsional)
-                                </label>
-                                <input
-                                  type="text"
-                                  placeholder="e.g. Akun CF Cadangan 1"
-                                  value={newAccountName}
-                                  onChange={(e) => setNewAccountName(e.target.value)}
-                                  className="input-pro w-full"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="text-[10px] font-semibold text-slate-400 block mb-0.5">
-                                  Cloudflare Account ID <span className="text-rose-400">*</span>
-                                </label>
-                                <input
-                                  type="text"
-                                  placeholder="e.g. 8f6b89f3a54b38d9751e1882ff207b1c"
-                                  value={newAccountId}
-                                  onChange={(e) => setNewAccountId(e.target.value)}
-                                  className="input-pro w-full"
-                                />
-                              </div>
-
-                              <div>
-                                <div className="flex items-center justify-between mb-0.5">
-                                  <label className="text-[10px] font-semibold text-slate-400">
-                                    Cloudflare API Token <span className="text-rose-400">*</span>
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={() => setShowNewToken(!showNewToken)}
-                                    className="text-[10px] text-slate-400 hover:text-slate-200"
-                                  >
-                                    {showNewToken ? 'Hide' : 'Show'}
-                                  </button>
-                                </div>
-                                <input
-                                  type={showNewToken ? 'text' : 'password'}
-                                  placeholder="Workers AI Read/Edit Token"
-                                  value={newAccountToken}
-                                  onChange={(e) => setNewAccountToken(e.target.value)}
-                                  className="input-pro w-full"
-                                />
-                              </div>
-
-                              <div className="flex justify-end space-x-2 pt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setIsAddingCfAccount(false)}
-                                  className="px-3 py-1 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.06] transition"
-                                >
-                                  Batal
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={!newAccountId.trim() || !newAccountToken.trim()}
-                                  onClick={handleAddCfAccount}
-                                  className="px-3 py-1 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition disabled:opacity-40"
-                                >
-                                  + Tambahkan ke Pool
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Quick / Single Account ID input for fallback */}
+                          {/* Fallback default Account ID (dipakai kalau memakai satu key tunggal / env) */}
                           <div className="pt-2 border-t border-white/[0.06]">
                             <span className="text-[10px] font-semibold text-slate-400 block mb-1">
-                              Default Cloudflare Account ID (Utama)
+                              Default Cloudflare Account ID (fallback key tunggal / env)
                             </span>
                             <input
                               type="text"
