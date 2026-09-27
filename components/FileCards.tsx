@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { archiveNameForFiles } from '@/lib/artifacts';
 import { Check, Copy, Download, Eye, FileArchive, FileCode, FolderOpen, X } from 'lucide-react';
 
 /** A file the model produced inside a chat answer (from a fenced code block). */
@@ -301,14 +302,7 @@ export function FilePreviewModal({
 
 /** Optional zip name for a set of files: <folder>.zip / <file>.zip / project.zip */
 export function zipNameForFiles(files: ArtifactFile[]): string {
-  const first = (files[0]?.name || '').trim();
-  if (files.length > 1) {
-    const seg = first.includes('/') ? first.split('/')[0].trim() : '';
-    if (seg && seg !== '.' && seg !== '..' && !seg.includes('\\')) return `${seg}.zip`;
-    return 'project.zip';
-  }
-  const base = first.replace(/\.[^.]+$/, '') || 'file';
-  return `${base}.zip`;
+  return archiveNameForFiles(files);
 }
 
 /**

@@ -38,6 +38,7 @@ import {
 import { DEFAULT_FALLBACK_GROUPS, DEFAULT_PROVIDERS } from '@/lib/config';
 import { buildZip } from '@/lib/zip';
 import { streamChatOnce, streamWithAutoContinue } from '@/lib/chat-stream';
+import { archiveNameForFiles, inferFilePath, withProjectRoot } from '@/lib/artifacts';
 import {
   ArtifactFile,
   ChatFilesPanel,
@@ -46,7 +47,6 @@ import {
   ZipAttachmentCard,
   extensionFor,
   isPreviewable,
-  zipNameForFiles,
 } from './FileCards';
 
 interface PlaygroundTabProps {
@@ -96,7 +96,7 @@ export interface ChatSession {
 // fence line (```lang path/to/file.ext) so the Playground can turn the answer
 // into real, downloadable files — Claude-artifact style.
 const FILE_MODE_INSTRUCTION =
-  'Mode Proyek aktif. Saat kamu membuat kode/berkas: tulis SETIAP file sebagai satu blok kode TERPISAH, dan tulis nama file (sertakan path relatif bila ada struktur, mis. src/app.js) tepat setelah bahasa pada baris pembuka blok — contoh baris pembuka: ```html index.html atau ```js src/app.js . Jangan menggabungkan beberapa file dalam satu blok, jangan menaruh isi file di dalam kalimat penjelasan, dan selalu tutup setiap blok dengan rapi. Setelah semua file selesai, akhiri jawaban dengan satu baris daftar: "📦 File: <nama-nama file>". Untuk tugas besar, kerjakan file demi file secara lengkap (jangan dipotong) — kalau perlu, tulis satu file per jawaban.';
+  'Mode Proyek (gaya Claude/artifacts) AKTIF. Aturan wajib: (1) Bangun SELURUH file yang dibutuhkan project, tiap file LENGKAP dan siap dijalankan — jangan pakai placeholder seperti "// sisanya sama", "...", atau "lanjutkan sendiri". (2) Tulis SETIAP file sebagai satu blok kode TERPISAH, dan tulis path file (relatif; pakai folder bila project berstruktur, mis. src/app.js) tepat setelah bahasa pada baris pembuka blok — contoh baris pembuka: ```js src/app.js . (3) Jangan menggabungkan beberapa file dalam satu blok, jangan menulis ulang file yang sama, dan tutup setiap blok dengan rapi. (4) Sertakan file pendukung yang diperlukan agar project bisa langsung jalan (mis. package.json, requirements.txt, index.html, styles.css, README.md singkat) sesuai kebutuhan. (5) Di akhir, tulis singkat cara menjalankannya lalu satu baris daftar: "📦 File: <semua file>". Kalau jawabannya panjang, tetap tuntaskan file demi file — user akan mengunduh seluruh project itu sebagai satu folder .zip.';
 
 const CONTINUE_INSTRUCTION =
   'Jawaban sebelumnya terpotong di tengah. Lanjutkan PERSIS dari titik terakhir: tulis HANYA lanjutannya saja, tanpa mengulang bagian sebelumnya, tanpa kalimat pembuka baru, dan pastikan blok kode ditutup dengan rapi.';
@@ -104,7 +104,7 @@ const CONTINUE_INSTRUCTION =
 const DEFAULT_WELCOME_MESSAGE: Message = {
   role: 'assistant',
   content:
-    '👋 **Zexin9 Gateway Online!**\n\nPilih model apa pun (misal `auto-smart` atau `deepseek-chat`), lampirkan file kode/dokumen jika diperlukan, dan kirim instruksi Anda.\n\n• **Mode File** (aktif) — model menulis setiap file sebagai blok kode bernama, hasilnya jadi kartu file yang bisa di-**Preview** (HTML/SVG), di-**Download** satu-satu, atau diunduh sekaligus sebagai **.zip** langsung dari jawabannya (gaya Claude).\n• **Auto-lanjut** (aktif) — jawaban coding panjang yang terpotong akan dilanjutkan otomatis sampai utuh, tidak lagi putus-putus.\n• **Panjang** — pilih Auto/8k/16k/32k kalau butuh jawaban lebih panjang.\n\nSemua riwayat sesi tersimpan permanen dan tidak akan hilang!',
+    '👋 **Zexin9 Gateway Online!**\n\nPilih model apa pun (misal `auto-smart` atau `deepseek-chat`), lampirkan file kode/dokumen jika diperlukan, dan kirim instruksi Anda.\n\n• **Mode File** (aktif) — model menulis setiap file sebagai blok kode bernama, hasilnya jadi kartu file yang bisa di-**Preview** (HTML/SVG), di-**Download** satu-satu, atau diunduh sekaligus sebagai **folder project .zip** yang siap diekstrak (gaya Claude) — nama file & struktur folder ditentukan otomatis.\n• **Auto-lanjut** (aktif) — jawaban coding panjang yang terpotong akan dilanjutkan otomatis sampai utuh, tidak lagi putus-putus.\n• **Panjang** — pilih Auto/8k/16k/32k kalau butuh jawaban lebih panjang.\n\nSemua riwayat sesi tersimpan permanen dan tidak akan hilang!',
 };
 
 // Helper: Trigger a browser download for a Blob
@@ -122,9 +122,12 @@ function downloadBlob(filename: string, blob: Blob) {
 // Helper: Download every generated file of a chat as one .zip
 function downloadFilesAsZip(files: ArtifactFile[], archiveName?: string) {
   if (!files.length) return;
-  const zip = buildZip(files.map((f) => ({ name: f.name, content: f.content })));
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-  const name = (archiveName || '').trim() || `zexin9-files-${stamp}.zip`;
+  const archive = (archiveName || '').trim() || archiveNameForFiles(files);
+  const rootName = archive.replace(/\.zip$/i, '') || 'project';
+  // Seluruh file satu jawaban dibungkus dalam satu folder project di dalam zip,
+  // jadi begitu diekstrak user langsung dapat folder project (bukan file lepas).
+  const zip = buildZip(withProjectRoot(files, rootName));
+  const name = /\.zip$/i.test(archive) ? archive : `${archive}.zip`;
   downloadBlob(name, new Blob([zip as unknown as BlobPart], { type: 'application/zip' }));
 }
 
@@ -216,16 +219,18 @@ function parseMarkdownParts(text: string): ContentPart[] {
     }
 
     const rawLang = match[1] || 'code';
-    let filename = match[2];
     const codeBody = match[3];
 
-    // If filename wasn't in backtick header, inspect first comment line (e.g., `# app.py` or `// index.ts`)
-    if (!filename) {
-      const firstLineMatch = codeBody.match(/^(?:#|\/\/|\/\*|<!--)\s*([a-zA-Z0-9_.-]+\.[a-zA-Z0-9]+)/);
-      if (firstLineMatch) {
-        filename = firstLineMatch[1];
-      }
-    }
+    // Nama file: dari baris pembuka blok -> kalimat sebelum blok -> komentar
+    // pertama -> tebakan isi kode (gaya Claude artifacts). Ini yang bikin
+    // "download project .zip" berisi file bernama benar, bukan file-1.txt.
+    const filename = inferFilePath({
+      declared: match[2],
+      language: rawLang,
+      content: codeBody,
+      precedingText: text.slice(lastIndex, match.index),
+      index: parts.filter((p) => p.type === 'code').length + 1,
+    });
 
     parts.push({
       type: 'code',
@@ -1505,7 +1510,7 @@ export function PlaygroundTab({
                             <ZipAttachmentCard
                               files={msgFiles}
                               onDownload={(files) =>
-                                downloadFilesAsZip(files, zipNameForFiles(files))
+                                downloadFilesAsZip(files, archiveNameForFiles(files))
                               }
                             />
                           );
