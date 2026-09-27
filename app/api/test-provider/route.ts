@@ -180,7 +180,7 @@ async function discoverModels(baseUrl: string, apiKey: string): Promise<string[]
  */
 function persistDetectionToAccounts(
   providerId: ProviderId,
-  body: { accountId?: string; apiKey?: string; baseUrl?: string },
+  body: { accountId?: string; apiKey?: string; baseUrl?: string; accountRowId?: string },
   modelsFound: string[],
   modelStatuses: Array<{ model: string; ok: boolean; status: number }>,
   overallOk: boolean,
@@ -190,6 +190,7 @@ function persistDetectionToAccounts(
   try {
     const accounts = db.getProviderAccounts();
     const wantedId = (body.accountId || '').trim();
+    const wantedRowId = (body.accountRowId || '').trim();
     const normUrl = (u?: string) => String(u || '').trim().replace(/\/+$/, '');
     const wantedUrl = normUrl(body.baseUrl);
     const wantedKey = (body.apiKey || '').trim();
@@ -198,6 +199,7 @@ function persistDetectionToAccounts(
     // Prefer the exact credential: two accounts can share one endpoint URL but
     // carry different API keys, and a ping must only update its own account.
     const matchAccount = (acc: any) =>
+      (Boolean(wantedRowId) && acc.id === wantedRowId) ||
       (Boolean(wantedId) && acc.id === wantedId) ||
       (Boolean(wantedKey) && acc.apiKey === wantedKey) ||
       (!wantedKey && Boolean(wantedUrl) && normUrl(acc.baseUrl) === wantedUrl);
@@ -281,7 +283,30 @@ export async function POST(req: NextRequest) {
     // Cold instances read the account list from the cloud database first.
     await db.ensureCloudConfigLoaded();
 
-    const { provider, apiKey, baseUrl, accountId, model } = await req.json();
+    let { provider, apiKey, baseUrl, accountId, model, accountRowId } = await req.json();
+
+    // Pinging ONE account card: the browser may send a masked (or no) key, so
+    // resolve the secret from the account row the server already stores.
+    const looksMaskedSecret = (v: unknown) => typeof v === 'string' && /[•*]{3,}/.test(v);
+    const cleanBodyStr = (v: unknown) => (typeof v === 'string' && !looksMaskedSecret(v) ? v.trim() : '');
+    apiKey = cleanBodyStr(apiKey);
+    baseUrl = cleanBodyStr(baseUrl);
+    accountId = cleanBodyStr(accountId);
+    accountRowId = cleanBodyStr(accountRowId);
+    if (!apiKey || !baseUrl || !accountId) {
+      const storedAccounts = db.getProviderAccounts();
+      const norm = (u: unknown) => String(u || '').trim().replace(/\/+$/, '');
+      const byRow = accountRowId ? storedAccounts.find((a) => a.id === accountRowId) : undefined;
+      const byUrl = baseUrl
+        ? storedAccounts.find((a) => a.provider === provider && norm(a.baseUrl) === norm(baseUrl))
+        : undefined;
+      const acc = byRow || byUrl;
+      if (acc) {
+        if (!apiKey) apiKey = String(acc.apiKey || '').trim();
+        if (!baseUrl) baseUrl = String(acc.baseUrl || '').trim();
+        if (!accountId) accountId = String(acc.accountId || '').trim();
+      }
+    }
 
     if (!provider) {
       return jsonResponse({ success: false, error: 'Provider is required' });
@@ -296,6 +321,8 @@ export async function POST(req: NextRequest) {
     if (apiKey && String(apiKey).trim()) headerKeys[`x-${provider}-key`] = String(apiKey).trim();
     if (requestedBaseUrl) headerKeys[`x-${provider}-base-url`] = requestedBaseUrl;
     if (accountId) headerKeys['x-cloudflare-account-id'] = accountId;
+    // Pin the pool to the one account the dashboard is testing (jika ada).
+    if (accountRowId) headerKeys['x-account-row-id'] = accountRowId;
 
     const tried: string[] = [];
     let modelsFound: string[] = [];
@@ -397,7 +424,7 @@ export async function POST(req: NextRequest) {
     if (usedModel && usedAttempt) {
       persistDetectionToAccounts(
         providerId,
-        { accountId, apiKey, baseUrl },
+        { accountId, apiKey, baseUrl, accountRowId: String(accountRowId || '') },
         modelsFound,
         attemptResults,
         true,
@@ -437,7 +464,7 @@ export async function POST(req: NextRequest) {
 
     persistDetectionToAccounts(
       providerId,
-      { accountId, apiKey, baseUrl },
+      { accountId, apiKey, baseUrl, accountRowId: String(accountRowId || '') },
       modelsFound,
       attemptResults,
       false,

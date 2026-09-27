@@ -496,9 +496,18 @@ export async function executeProviderAccountPoolCall(
   signal?: AbortSignal
 ): Promise<{ response: Response; accountUsed?: ProviderAccount; errors: string[] }> {
   // Get all active accounts for this provider
-  const accounts = getEffectiveProviderAccounts(provider, headerKeys).filter(
+  let accounts = getEffectiveProviderAccounts(provider, headerKeys).filter(
     (a) => a.enabled !== false
   );
+
+  // "Tes akun ini saja": the dashboard pins one account row so a per-account
+  // test cannot be served by a sibling account in the pool (which would show a
+  // misleading ✅ and attach that model to the wrong account).
+  const pinRowId = (headerKeys['x-account-row-id'] || '').trim();
+  if (pinRowId) {
+    const pinned = accounts.filter((a) => a.id === pinRowId);
+    if (pinned.length > 0) accounts = pinned;
+  }
 
   if (accounts.length === 0 && provider !== 'custom') {
     return {

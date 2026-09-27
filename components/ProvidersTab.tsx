@@ -381,6 +381,7 @@ export function ProvidersTab({
           provider: 'cloudflare',
           apiKey: acc.apiToken,
           accountId: acc.accountId,
+          accountRowId: acc.id,
         }),
       });
       const data = await res.json();
@@ -490,6 +491,24 @@ export function ProvidersTab({
     saveProviderAccountsLocalAndSync(updated);
   };
 
+  // "Tambah Akun" dari kartu provider: buka form akun dengan provider terisi.
+  const startAddAccountFor = (providerId: ProviderId) => {
+    setNewAccProvider(providerId);
+    setNewAccKey('');
+    setNewAccName('');
+    setNewAccAccountId('');
+    setNewAccBaseUrl('');
+    setFormDetectedModels([]);
+    setFormDetectResult(null);
+    setIsAddingAccount(true);
+    setSelectedFilterProvider(providerId);
+    if (typeof document !== 'undefined') {
+      document
+        .getElementById('zexin9-accounts-manager')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   const handleAddAccount = () => {
     if (!newAccKey.trim()) return;
 
@@ -567,6 +586,7 @@ export function ProvidersTab({
           apiKey: acc.apiKey,
           accountId: acc.accountId,
           baseUrl: acc.baseUrl,
+          accountRowId: acc.id,
         }),
       });
       const data = await res.json();
@@ -882,15 +902,23 @@ export function ProvidersTab({
 
     const modelToTest = getEffectiveModel(providerId);
 
+    // Tidak ada kolom API key terpisah lagi: untuk provider-level Test Model,
+    // pakai key/base URL akun pertama milik provider ini (kalau ada).
+    const accForTest =
+      providerAccountsRef.current.find((a) => a.provider === providerId && a.enabled !== false) ||
+      providerAccountsRef.current.find((a) => a.provider === providerId);
+
     try {
       const res = await fetch('/api/test-provider', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: providerId,
-          apiKey: keys[providerId] || undefined,
-          baseUrl: baseUrls[providerId] || undefined,
-          accountId: providerId === 'cloudflare' ? cfAccountId : undefined,
+          apiKey: ((keys as Record<string, string>)[providerId] || accForTest?.apiKey || '').trim() || undefined,
+          baseUrl: ((baseUrls as Record<string, string>)[providerId] || accForTest?.baseUrl || '').trim() || undefined,
+          accountId:
+            (providerId === 'cloudflare' ? cfAccountId : '') || accForTest?.accountId || undefined,
+          accountRowId: accForTest?.id,
           model: modelToTest || undefined,
         }),
       });
@@ -1102,7 +1130,7 @@ export function ProvidersTab({
       </div>
 
       {/* 9Router Universal Connections & Multi-Account Manager */}
-      <div className="pro-card p-5 sm:p-6 space-y-4 relative overflow-hidden">
+      <div id="zexin9-accounts-manager" className="pro-card p-5 sm:p-6 space-y-4 relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20 shrink-0 border border-white/20">
@@ -1627,6 +1655,7 @@ export function ProvidersTab({
                 const isConfiguredEnv = Boolean(envConfigured[provider.id]);
                 const currentKey = keys[provider.id] || '';
                 const hasKey = Boolean(currentKey || isConfiguredEnv);
+                const tierAccounts = providerAccounts.filter((a) => a.provider === provider.id);
                 const ping = pingResults[provider.id];
                 const activeModel = getEffectiveModel(provider.id);
                 const isCustomSelected = selectedModels[provider.id] === 'custom';
@@ -1635,7 +1664,7 @@ export function ProvidersTab({
                   <div
                     key={provider.id}
                     className={`pro-card p-4 sm:p-5 transition ${
-                      hasKey ? '' : 'opacity-85'
+                      hasKey || tierAccounts.length > 0 ? '' : 'opacity-85'
                     }`}
                   >
                     {/* Header */}
@@ -1693,55 +1722,85 @@ export function ProvidersTab({
 
                     {/* Inputs */}
                     <div className="space-y-3">
-                      {/* API Key */}
-                      <div>
-                        <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 mb-1">
-                          <span>
-                            {provider.id === 'cloudflare' ? 'Cloudflare API Token' : 'API Key'}
+                      {/* Key dikelola per akun — tidak ada kolom API key terpisah di sini */}
+                      <div className="p-3 rounded-xl bg-black/30 border border-white/[0.08] space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-semibold text-slate-300">
+                            🔑 Key &amp; endpoint per akun{' '}
+                            <span className="text-slate-500 font-mono">({tierAccounts.length})</span>
                           </span>
                           <button
                             type="button"
-                            onClick={() => toggleShowKey(provider.id)}
-                            className="text-slate-500 hover:text-slate-300 flex items-center space-x-1"
+                            onClick={() => startAddAccountFor(provider.id)}
+                            className="px-2 py-1 text-[10px] font-semibold rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border border-cyan-500/30 flex items-center space-x-1 transition active:scale-95"
+                            title="Tambah akun untuk provider ini — key diisi sekali saat menambah akun"
                           >
-                            {showKeys[provider.id] ? (
-                              <>
-                                <EyeOff className="w-3 h-3" />
-                                <span>Hide</span>
-                              </>
-                            ) : (
-                              <>
-                                <Eye className="w-3 h-3" />
-                                <span>Show</span>
-                              </>
-                            )}
+                            <Plus className="w-3 h-3" />
+                            <span>Tambah Akun</span>
                           </button>
                         </div>
-                        <input
-                          type={showKeys[provider.id] ? 'text' : 'password'}
-                          placeholder={
-                            isConfiguredEnv
-                              ? 'Configured in Environment Variables'
-                              : `Enter ${provider.name} Key / Token`
-                          }
-                          value={currentKey}
-                          onChange={(e) => handleKeyChange(provider.id, e.target.value)}
-                          className="input-pro w-full"
-                        />
-                        {provider.id !== 'cloudflare' && (
-                          <p className="text-[10px] text-slate-500 mt-1">
-                            💡 Mendukung multi-key (pisahkan dengan koma atau baris baru) untuk failover otomatis.
+
+                        {tierAccounts.length === 0 ? (
+                          <p className="text-[10px] text-slate-500 leading-relaxed">
+                            Belum ada akun untuk provider ini. API key (dan endpoint/Account ID) diisi
+                            sekali saat menambah akun — tidak ada kolom key terpisah lagi.
+                            {isConfiguredEnv && ' Env untuk provider ini terdeteksi, jadi tetap bisa dipakai tanpa akun.'}
+                            {provider.id === 'custom' &&
+                              ' Untuk endpoint dari web lain: klik Tambah Akun, isi Base URL + API key.'}
                           </p>
+                        ) : (
+                          tierAccounts.map((acc) => {
+                            const accPing = accPingResults[acc.id];
+                            return (
+                              <div
+                                key={acc.id}
+                                className="flex items-center justify-between gap-2 rounded-lg bg-black/40 border border-white/[0.06] px-2 py-1.5"
+                              >
+                                <span className="flex items-center gap-2 min-w-0">
+                                  <span
+                                    className={`w-2 h-2 rounded-full shrink-0 ${
+                                      acc.enabled !== false ? 'bg-emerald-400' : 'bg-slate-600'
+                                    }`}
+                                  />
+                                  <span className="text-[11px] font-semibold text-slate-200 truncate">
+                                    {acc.name || 'Akun'}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-500 shrink-0">
+                                    ••••{acc.apiKey ? acc.apiKey.slice(-4) : ''}
+                                  </span>
+                                </span>
+                                <span className="flex items-center gap-2 shrink-0">
+                                  {accPing && !accPing.loading && (
+                                    <span
+                                      className={`text-[10px] font-mono ${
+                                        accPing.success ? 'text-emerald-300' : 'text-rose-300'
+                                      }`}
+                                      title={accPing.error || accPing.hint || ''}
+                                    >
+                                      {accPing.success
+                                        ? `✅ ${accPing.latency ?? ''}ms`
+                                        : `❌ ${accPing.status || 'gagal'}`}
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    disabled={accPing?.loading}
+                                    onClick={() => handleTestAccount(acc)}
+                                    className="px-2 py-1 text-[10px] font-mono rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-cyan-300 border border-white/[0.08] flex items-center space-x-1 transition disabled:opacity-50"
+                                    title="Tes akun ini saja (key + endpoint akun ini)"
+                                  >
+                                    {accPing?.loading ? (
+                                      <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                                    ) : (
+                                      <Play className="w-2.5 h-2.5" />
+                                    )}
+                                    <span>Tes</span>
+                                  </button>
+                                </span>
+                              </div>
+                            );
+                          })
                         )}
-                        {provider.id === 'custom' &&
-                          providerAccounts.filter((a) => a.provider === 'custom').length > 0 && (
-                            <p className="text-[10px] text-slate-500 mt-1">
-                              ℹ️ {providerAccounts.filter((a) => a.provider === 'custom').length} akun Custom
-                              tersambung — API key &amp; endpoint disimpan di tiap akun (lihat bagian Akun
-                              Terhubung di atas). Kolom ini opsional: dipakai sebagai default/fallback bila
-                              tidak ada akun, dan oleh tombol Test Model di kartu ini.
-                            </p>
-                          )}
                       </div>
 
                       {/* Cloudflare Multi-Account Pool Manager */}
@@ -2160,7 +2219,10 @@ export function ProvidersTab({
 
                         <button
                           onClick={() => testProviderPing(provider.id)}
-                          disabled={ping?.loading || (!hasKey && provider.id !== 'custom')}
+                          disabled={
+                            ping?.loading ||
+                            (!hasKey && tierAccounts.length === 0 && provider.id !== 'custom')
+                          }
                           className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-40 text-xs font-medium text-slate-200 border border-white/[0.08] transition active:scale-95"
                         >
                           <Play className="w-3 h-3 text-cyan-400 fill-current" />
