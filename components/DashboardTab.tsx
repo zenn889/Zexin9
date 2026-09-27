@@ -22,6 +22,10 @@ import {
 interface DashboardTabProps {
   onSelectTab: (tab: string) => void;
   configuredCount: number;
+  /** Base URL gateway (dipakai klien luar seperti Hermes/bot WA). */
+  baseUrl?: string;
+  /** Master key efektif yang dipakai server (dari env atau database). */
+  gatewaySecret?: string;
 }
 
 interface RequestLogItem {
@@ -49,12 +53,24 @@ interface ClientTokenItem {
   requestCount: number;
 }
 
-export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps) {
+export function DashboardTab({
+  onSelectTab,
+  configuredCount,
+  baseUrl,
+  gatewaySecret,
+}: DashboardTabProps) {
   const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'all'>('today');
   const [logs, setLogs] = useState<RequestLogItem[]>([]);
   const [clientTokens, setClientTokens] = useState<ClientTokenItem[]>([]);
   const [newTokenName, setNewTokenName] = useState('');
   const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
+  const [authMeta, setAuthMeta] = useState<{
+    masterSource: string;
+    envKeyName: string | null;
+    tokensSaved: number;
+  } | null>(null);
+  const [copiedAuthField, setCopiedAuthField] = useState<string | null>(null);
+  const [revealGatewayKey, setRevealGatewayKey] = useState(false);
   const [authCheckKey, setAuthCheckKey] = useState('');
   const [authCheckLoading, setAuthCheckLoading] = useState(false);
   const [authCheckResult, setAuthCheckResult] = useState<{
@@ -123,6 +139,35 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live]);
+
+  // Info key efektif (env vs database) — dipakai panel "Pakai di aplikasi luar".
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/auth')
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive || !d || !d.isAuthenticated) return;
+        setAuthMeta({
+          masterSource: String(d.masterSource || 'none'),
+          envKeyName: d.envKeyName || null,
+          tokensSaved: Number(d.tokensSaved || 0),
+        });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const copyAuthField = async (field: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedAuthField(field);
+      setTimeout(() => setCopiedAuthField(null), 1500);
+    } catch {
+      // ignore
+    }
+  };
 
   const handleCreateToken = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -597,6 +642,101 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
             </button>
           </form>
         </div>
+
+        {/* Pakai di aplikasi luar (Hermes, bot WA, Cursor): Base URL + key efektif */}
+        {(() => {
+          const gatewayOrigin = (baseUrl || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/v1\/?$/, '').replace(/\/$/, '');
+          const baseV1 = `${gatewayOrigin}/v1`;
+          const effectiveKey = (gatewaySecret || '').trim();
+          const masked = effectiveKey
+            ? `${effectiveKey.slice(0, 6)}${'•'.repeat(Math.max(4, Math.min(12, effectiveKey.length - 10)))}${effectiveKey.slice(-4)}`
+            : '';
+          return (
+            <div className="p-3 sm:p-4 rounded-xl bg-cyan-500/[0.06] border border-cyan-500/20 space-y-2.5">
+              <div className="flex items-start space-x-2">
+                <span className="text-[11px] font-bold text-cyan-200">
+                  Pakai di aplikasi luar (Hermes, bot WA, Cursor, Cline)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.06]">
+                  <div className="text-[10px] font-semibold text-slate-400 mb-1">Base URL</div>
+                  <div className="flex items-center space-x-2">
+                    <code className="text-[11px] font-mono text-cyan-300 truncate flex-1">{baseV1}</code>
+                    <button
+                      onClick={() => copyAuthField('base', baseV1)}
+                      className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-white/[0.06] transition shrink-0"
+                      title="Copy Base URL"
+                    >
+                      {copiedAuthField === 'base' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.06]">
+                  <div className="text-[10px] font-semibold text-slate-400 mb-1">
+                    API key / Kunci Akses (sama dengan key untuk login dashboard ini)
+                  </div>
+                  {effectiveKey ? (
+                    <div className="flex items-center space-x-2">
+                      <code className="text-[11px] font-mono text-cyan-300 truncate flex-1">
+                        {revealGatewayKey ? effectiveKey : masked}
+                      </code>
+                      <button
+                        onClick={() => setRevealGatewayKey((v) => !v)}
+                        className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-white/[0.06] transition shrink-0 text-[10px] font-bold"
+                        title={revealGatewayKey ? 'Sembunyikan' : 'Tampilkan'}
+                      >
+                        {revealGatewayKey ? 'Hide' : 'Show'}
+                      </button>
+                      <button
+                        onClick={() => copyAuthField('key', effectiveKey)}
+                        className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-white/[0.06] transition shrink-0"
+                        title="Copy API key"
+                      >
+                        {copiedAuthField === 'key' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-slate-400">
+                      Belum ada kunci akses (mode terbuka) — atau kamu belum login. Pakai Client Bearer Token di bawah.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="text-[11px] text-slate-300 leading-relaxed space-y-1">
+                <div>
+                  1) Isi Base URL <code className="text-cyan-300">{baseV1}</code> dan key di atas (atau Client Bearer
+                  Token <code className="text-cyan-300">sk-zx9-...</code> dari daftar di bawah).
+                </div>
+                <div>
+                  2) Header yang dipakai: <code className="text-cyan-300">Authorization: Bearer &lt;key&gt;</code>. Model:{' '}
+                  <code className="text-cyan-300">auto-smart</code> atau dari <code className="text-cyan-300">{baseV1}/models</code>.
+                </div>
+                {authMeta?.masterSource === 'env' && (
+                  <div className="text-amber-200">
+                    ⚠️ Master key efektif server ini berasal dari <b>environment hosting ({authMeta.envKeyName})</b> — jadi key
+                    yang tersimpan lewat dashboard diabaikan. Pakai nilai {authMeta.envKeyName} itu (key di atas sudah nilai
+                    yang benar kalau kamu login dengan key tersebut), atau buat Client Bearer Token baru di bawah.
+                  </div>
+                )}
+                {authMeta?.masterSource === 'database' && (
+                  <div className="text-emerald-200/90">
+                    ✅ Master key efektif berasal dari database dashboard — key di atas (yang kamu pakai login) berlaku juga
+                    sebagai API key untuk aplikasi luar.
+                  </div>
+                )}
+                {authMeta && authMeta.tokensSaved === 0 && (
+                  <div className="text-slate-400">
+                    Belum ada Client Bearer Token. Klik Issue Token di kanan atas kartu ini kalau mau key terpisah per aplikasi.
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Cek Key — jawab "kenapa klien luar kena 401?" tanpa perlu curling manual */}
         <form

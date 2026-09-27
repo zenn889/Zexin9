@@ -271,6 +271,8 @@ export default function Home() {
             <DashboardTab
               onSelectTab={setActiveTab}
               configuredCount={configuredCount}
+              baseUrl={baseUrl}
+              gatewaySecret={gatewaySecret}
             />
           )}
 

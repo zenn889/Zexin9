@@ -51,12 +51,31 @@ export async function GET(req: NextRequest) {
   const authCookie = req.cookies.get('zexin9_auth')?.value || req.cookies.get('9router_auth')?.value;
   const isAuthenticated = Boolean(authCookie && authCookie === secret);
 
+  // Sumber master key efektif: env (ROUTER_API_KEY/GATEWAY_SECRET) menang atas
+  // nilai yang tersimpan di database dashboard. Ditampilkan ke sesi yang sudah
+  // terautentikasi supaya user tahu key mana yang benar-benar dipakai server.
+  const envKeyName = process.env.ROUTER_API_KEY
+    ? 'ROUTER_API_KEY'
+    : process.env.GATEWAY_SECRET
+      ? 'GATEWAY_SECRET'
+      : null;
+  const masterSource: 'env' | 'database' | 'none' = envKeyName ? 'env' : hasMasterKey ? 'database' : 'none';
+  let tokensSaved = 0;
+  try {
+    tokensSaved = db.getTokens().length;
+  } catch {
+    tokensSaved = 0;
+  }
+
   return new Response(
     JSON.stringify({
       authRequired: true,
       hasMasterKey,
       isAuthenticated,
       currentKey: isAuthenticated ? secret : undefined,
+      masterSource: isAuthenticated ? masterSource : undefined,
+      envKeyName: isAuthenticated ? envKeyName : undefined,
+      tokensSaved: isAuthenticated ? tokensSaved : undefined,
     }),
     {
       status: 200,
