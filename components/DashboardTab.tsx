@@ -36,6 +36,7 @@ interface RequestLogItem {
   servedProvider: string;
   servedModel: string;
   fallbackCount: number;
+  failures?: string[];
   failoverNote?: string;
   promptTokens: number;
   completionTokens: number;
@@ -563,9 +564,29 @@ export function DashboardTab({
                       </td>
                       <td className="p-3 whitespace-nowrap">
                         {isFailover ? (
-                          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[11px] font-medium">
-                            <span>⚠️ {log.failoverNote || `Failover Tier ${log.fallbackCount}`}</span>
-                          </span>
+                          <div className="space-y-1">
+                            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[11px] font-medium">
+                              <span>⚠️ {log.failoverNote || `Failover Tier ${log.fallbackCount}`}</span>
+                            </span>
+                            <div
+                              className="text-[10px] text-slate-400 font-sans leading-snug max-w-[280px]"
+                              title={(log.failures || []).join('\n')}
+                            >
+                              {log.servedProvider && (
+                                <span className="text-slate-500">
+                                  akhirnya dijawab{' '}
+                                  <span className="text-cyan-300 font-mono">
+                                    {log.servedProvider}/{log.servedModel}
+                                  </span>
+                                </span>
+                              )}
+                              {(log.failures || []).length > 0 && (
+                                <div className="text-amber-200/80 truncate">
+                                  sebab: {(log.failures || [])[0]}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         ) : (
                           <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-[11px] font-medium">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />

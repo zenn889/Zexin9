@@ -107,6 +107,22 @@ export async function POST(req: NextRequest) {
     const latencyMs = Date.now() - startTime;
     const promptTokens = Math.round(JSON.stringify(body.messages).length / 4);
 
+    // Completion tokens: untuk respons non-streaming kita bisa membaca usage
+    // asli dari provider (clone supaya body tetap utuh untuk klien); untuk
+    // streaming nilainya tetap 0 karena chunk tidak membawa usage.
+    let completionTokens = 0;
+    try {
+      const contentType = result.response.headers.get('content-type') || '';
+      if (contentType.includes('application/json') && result.response.status === 200) {
+        const parsed = JSON.parse(await result.response.clone().text());
+        const usageCompletion = Number(parsed?.usage?.completion_tokens || 0);
+        const contentLength = String(parsed?.choices?.[0]?.message?.content || '').length;
+        completionTokens = usageCompletion > 0 ? usageCompletion : Math.round(contentLength / 4);
+      }
+    } catch {
+      completionTokens = 0;
+    }
+
     // 5. Record request in database
     db.addLog({
       id: `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -120,8 +136,9 @@ export async function POST(req: NextRequest) {
         result.fallbackCount > 0
           ? `Auto-failover tier ${result.fallbackCount} triggered`
           : 'Direct route (Tier 1)',
+      failures: (result.failureLogs || []).slice(0, 4).map((f) => String(f).slice(0, 200)),
       promptTokens,
-      completionTokens: 0,
+      completionTokens,
       tokensSaved: result.tokensSaved,
       latencyMs,
       status: result.response.status,

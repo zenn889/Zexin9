@@ -420,10 +420,21 @@ function appendUserConfiguredCandidates(
   }
 
   // Custom first so the user's own endpoint is tried before generic tiers.
+  // Pengecualian: nama grup virtual (auto-smart, auto-fast, …) itu milik gateway,
+  // bukan id model upstream. Kalau akun user belum punya katalog model, meneruskan
+  // alias ke endpoint pihak ketiga hampir selalu 404 — jadi jadikan percobaan
+  // TERAKHIR, bukan percobaan pertama yang bikin lambat + warning failover palsu.
+  const isVirtualAlias = DEFAULT_FALLBACK_GROUPS.some(
+    (g) => g.id.toLowerCase() === requestedModel.toLowerCase()
+  );
+  const customFirst = !(
+    isVirtualAlias &&
+    (!customModelsOverride || customModelsOverride.length === 0)
+  );
   if (candidates.some((c) => c.provider === 'custom')) {
     const customs = candidates.filter((c) => c.provider === 'custom');
     const rest = candidates.filter((c) => c.provider !== 'custom');
-    return [...customs, ...rest];
+    return customFirst ? [...customs, ...rest] : [...rest, ...customs];
   }
   return candidates;
 }

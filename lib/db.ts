@@ -22,6 +22,8 @@ export interface RequestLog {
   servedModel: string;
   fallbackCount: number;
   failoverNote?: string;
+  /** Alasan singkat tiap percobaan yang gagal sebelum jawaban berhasil. */
+  failures?: string[];
   promptTokens: number;
   completionTokens: number;
   tokensSaved: number;
