@@ -49,7 +49,10 @@ export async function POST(req: NextRequest) {
     if (hasSecretConfigured) {
       const isValid = db.verifyToken(clientKey);
       if (!isValid) {
-        return anthropicErrorResponse(401, 'Invalid API Key / Bearer Token');
+        return anthropicErrorResponse(
+          401,
+          'Invalid API Key / Bearer Token — pakai master key (ROUTER_API_KEY/GATEWAY_SECRET) atau Client Bearer Token (sk-zx9-...) dari Dashboard; cek cepat di POST /api/auth-check.'
+        );
       }
     }
 

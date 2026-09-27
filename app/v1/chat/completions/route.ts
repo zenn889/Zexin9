@@ -53,7 +53,10 @@ export async function POST(req: NextRequest) {
         return new Response(
           JSON.stringify({
             error: {
-              message: 'Unauthorized: Invalid or missing Router Gateway API Key / Bearer Token.',
+              message:
+              'Unauthorized: Invalid or missing Router Gateway API Key / Bearer Token. ' +
+              'Kirim header Authorization: Bearer <key>; key harus sama dengan master key (ROUTER_API_KEY/GATEWAY_SECRET) '
+              + 'atau Client Bearer Token (sk-zx9-...) dari Dashboard. Cek cepat: POST /api/auth-check dengan {token}.',
               type: 'invalid_request_error',
               code: 'unauthorized',
             },

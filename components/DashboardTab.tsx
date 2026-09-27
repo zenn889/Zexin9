@@ -55,6 +55,16 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
   const [clientTokens, setClientTokens] = useState<ClientTokenItem[]>([]);
   const [newTokenName, setNewTokenName] = useState('');
   const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
+  const [authCheckKey, setAuthCheckKey] = useState('');
+  const [authCheckLoading, setAuthCheckLoading] = useState(false);
+  const [authCheckResult, setAuthCheckResult] = useState<{
+    valid: boolean;
+    kind: string;
+    masterSource: string;
+    envKeyName: string | null;
+    tokensSaved: number;
+    hint: string[];
+  } | null>(null);
   const [origin, setOrigin] = useState('');
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [filterModel, setFilterModel] = useState('');
@@ -130,6 +140,42 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
       }
     } catch {
       // ignore
+    }
+  };
+
+  // Cek key: memastikan key yang dipakai aplikasi luar (Hermes, bot WA, Cursor)
+  // benar-benar diterima server ini — penyebab 401 paling sering.
+  const handleAuthCheck = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = authCheckKey.trim();
+    if (!token) return;
+    setAuthCheckLoading(true);
+    try {
+      const res = await fetch('/api/auth-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const data = await res.json();
+      setAuthCheckResult({
+        valid: Boolean(data.valid),
+        kind: String(data.kind || ''),
+        masterSource: String(data.masterSource || 'none'),
+        envKeyName: data.envKeyName || null,
+        tokensSaved: Number(data.tokensSaved || 0),
+        hint: Array.isArray(data.hint) ? data.hint : [],
+      });
+    } catch {
+      setAuthCheckResult({
+        valid: false,
+        kind: 'error',
+        masterSource: 'none',
+        envKeyName: null,
+        tokensSaved: 0,
+        hint: ['Tidak bisa menghubungi server untuk cek key (koneksi/gagal).'],
+      });
+    } finally {
+      setAuthCheckLoading(false);
     }
   };
 
@@ -551,6 +597,59 @@ export function DashboardTab({ onSelectTab, configuredCount }: DashboardTabProps
             </button>
           </form>
         </div>
+
+        {/* Cek Key — jawab "kenapa klien luar kena 401?" tanpa perlu curling manual */}
+        <form
+          onSubmit={handleAuthCheck}
+          className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-3 rounded-xl bg-black/40 border border-white/[0.06]"
+        >
+          <input
+            type="text"
+            placeholder="Tempel key yang dipakai klien (sk-zx9-... atau master key) untuk dicek"
+            value={authCheckKey}
+            onChange={(e) => setAuthCheckKey(e.target.value)}
+            className="input-pro w-full sm:flex-1 font-mono text-xs"
+          />
+          <button
+            type="submit"
+            disabled={authCheckLoading || !authCheckKey.trim()}
+            className="inline-flex items-center justify-center space-x-1.5 px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-40 text-white font-bold text-xs border border-white/[0.08] transition active:scale-95 shrink-0"
+          >
+            <span>{authCheckLoading ? 'Mengecek...' : 'Cek Key'}</span>
+          </button>
+        </form>
+        {authCheckResult && (
+          <div
+            className={`p-3 rounded-xl border text-[11px] leading-relaxed space-y-1 ${
+              authCheckResult.valid
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-200'
+                : 'bg-rose-500/10 border-rose-500/20 text-rose-200'
+            }`}
+          >
+            <div className="font-bold">
+              {authCheckResult.valid ? '✅ Key ini diterima server' : '❌ Key ini ditolak server'}
+              {authCheckResult.kind === 'client-token'
+                ? ' — Client Bearer Token'
+                : authCheckResult.kind === 'master-env'
+                  ? ' — Master key (dari environment)'
+                  : authCheckResult.kind === 'master-database'
+                    ? ' — Master key (dari database dashboard)'
+                    : ''}
+            </div>
+            {authCheckResult.hint.map((h, i) => (
+              <div key={i}>• {h}</div>
+            ))}
+            <div className="text-slate-400 pt-1 border-t border-white/[0.06]">
+              Master key efektif dari:{' '}
+              {authCheckResult.masterSource === 'env'
+                ? `environment hosting (${authCheckResult.envKeyName}) — key tersimpan di dashboard diabaikan`
+                : authCheckResult.masterSource === 'database'
+                  ? 'database dashboard'
+                  : 'belum ada (mode terbuka)'}{' '}
+              · Client Bearer Tokens tersimpan: {authCheckResult.tokensSaved}
+            </div>
+          </div>
+        )}
 
         {/* Tokens List */}
         <div className="divide-y divide-white/[0.04] border border-white/[0.06] rounded-xl bg-black/30 overflow-hidden">
