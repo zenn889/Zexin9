@@ -1,5 +1,33 @@
 import { CloudflareAccount, ModelFallbackGroup, ProviderConfig, ProviderId, ProviderAccount } from './types';
 
+/**
+ * Catatan singkat model Cloudflare yang relevan untuk kerja agentik (coding +
+ * tool calling). Dipakai UI sebagai badge/tooltip supaya user tahu mana yang
+ * bisa dipakai untuk tugas seperti "push ke GitHub" (butuh function calling).
+ * Sumber: developers.cloudflare.com/workers-ai/models + ai.flared.au (live list).
+ */
+export const CF_MODEL_HINTS: Record<
+  string,
+  { coding?: boolean; tools?: boolean; note?: string }
+> = {
+  '@cf/zai-org/glm-5.3': { coding: true, tools: true, note: 'flagship agentic coding, ctx 1.3M, tools + reasoning' },
+  '@cf/zai-org/glm-5.3-flash': { coding: true, tools: true, note: 'agentic coding versi cepat, ctx 1.3M' },
+  '@cf/zai-org/glm-5.2': { coding: true, tools: true, note: 'model agentic coding Z.ai, ctx 262K' },
+  '@cf/zai-org/glm-4.7-flash': { tools: true, note: 'cepat & murah, multi-turn tool calling, ctx 131K' },
+  '@cf/moonshotai/kimi-k2.7-code': { coding: true, tools: true, note: 'khusus coding (1T params), multi-turn tools, ctx 262K' },
+  '@cf/moonshotai/kimi-k2.6': { tools: true, note: 'serbaguna agentic, multi-turn tools, ctx 262K' },
+  '@cf/deepseek-ai/deepseek-v4-flash-0731': { coding: true, tools: true, note: 'agentic murah, ctx 1.3M' },
+  '@cf/deepseek-ai/deepseek-v4-pro-0813': { coding: true, tools: true, note: 'reasoning kuat, ctx 1M' },
+  '@cf/qwen/qwen3.8-27b': { coding: true, tools: true, note: 'murah + vision + tools, ctx 262K' },
+  '@cf/nvidia/nemotron-3-120b-a12b': { tools: true, note: 'MoE untuk multi-agent, ctx 256K' },
+  '@cf/openai/gpt-oss-120b': { coding: true, tools: true, note: 'open-weight OpenAI, tools, ctx 128K' },
+  '@cf/openai/gpt-oss-20b': { tools: true, note: 'versi kecil gpt-oss, cepat, ctx 128K' },
+  '@cf/mistralai/mistral-small-3.1-24b-instruct': { tools: true, note: 'long context + tool calling, ctx 128K' },
+  '@cf/meta/llama-4-scout-17b-16e-instruct': { tools: true, note: 'Llama 4, tools + vision, ctx 131K' },
+  '@cf/meta/llama-3.3-70b-instruct-fp8-fast': { tools: true, note: 'tools, tapi ctx kecil (24K)' },
+  '@cf/qwen/qwen3-30b-a3b-fp8': { tools: true, note: 'qwen3 MoE, tools, ctx 33K' },
+};
+
 export const DEFAULT_PROVIDERS: ProviderConfig[] = [
   {
     id: 'anthropic',
@@ -151,7 +179,7 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     enabled: true,
     priority: 9,
     models: [
-      // Text-generation catalog (updated from developers.cloudflare.com/workers-ai/models).
+// Text-generation catalog (updated from developers.cloudflare.com/workers-ai/models).
       '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
       '@cf/meta/llama-3.1-8b-instruct-fp8',
       '@cf/meta/llama-3.2-3b-instruct',
@@ -172,6 +200,9 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
       '@cf/openai/gpt-oss-120b',
       '@cf/openai/gpt-oss-20b',
       '@cf/ibm-granite/granite-4.0-h-micro',
+      '@cf/zai-org/glm-5.3-flash',
+      '@cf/zai-org/glm-5.2',
+      '@cf/nvidia/nemotron-3-120b-a12b',
     ],
   },
   {

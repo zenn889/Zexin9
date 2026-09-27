@@ -27,7 +27,7 @@ import {
   Tag,
   CheckCheck,
 } from 'lucide-react';
-import { DEFAULT_PROVIDERS } from '@/lib/config';
+import { CF_MODEL_HINTS, DEFAULT_PROVIDERS } from '@/lib/config';
 import { ProviderId, CloudflareAccount, ProviderAccount } from '@/lib/types';
 
 interface ProvidersTabProps {
@@ -1899,6 +1899,7 @@ export function ProvidersTab({
                             const isSelected = activeModel === m;
                             const isUserCustom = (userCustomModels[provider.id] || []).includes(m);
                             const isVerified = isUserCustom && (verifiedModels[provider.id] || []).includes(m);
+                            const cfHint = provider.id === 'cloudflare' ? CF_MODEL_HINTS[m] : undefined;
                             return (
                               <span
                                 key={m}
@@ -1908,10 +1909,20 @@ export function ProvidersTab({
                                     ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-semibold shadow-sm'
                                     : 'bg-white/[0.03] text-slate-400 hover:text-slate-200 border-white/[0.06] hover:border-white/[0.12]'
                                 }`}
-                                title={`Klik untuk pilih model: ${m}${isVerified ? ' (terverifikasi ✅ sudah dijawab endpoint)' : ''}`}
+                                title={`Klik untuk pilih model: ${m}${cfHint?.note ? `\n${cfHint.note}` : ''}${cfHint?.tools ? '\n🛠 mendukung tool calling — bisa dipakai untuk tugas agentik (mis. menjalankan git push lewat aplikasi klien)' : ''}${isVerified ? ' (terverifikasi ✅ sudah dijawab endpoint)' : ''}`}
                               >
                                 {isSelected && <Check className="w-3 h-3 text-cyan-400 shrink-0" />}
                                 <span>{isVerified ? '✅ ' : ''}{m}</span>
+                                {cfHint?.coding && (
+                                  <span className="text-[9px] leading-none px-1 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20" title="Bagus untuk coding">
+                                    🧠
+                                  </span>
+                                )}
+                                {cfHint?.tools && (
+                                  <span className="text-[9px] leading-none px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20" title="Mendukung tool calling / function calling">
+                                    🛠
+                                  </span>
+                                )}
                                 {isUserCustom && (
                                   <button
                                     type="button"
